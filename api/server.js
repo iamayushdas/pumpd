@@ -155,14 +155,24 @@ function initMailTransporter() {
   }
   
   try {
+    console.log('[Email] Creating SMTP transport with host:', SMTP_HOST, 'port:', SMTP_PORT);
     mailTransporter = nodemailer.createTransport({
       host: SMTP_HOST,
       port: SMTP_PORT,
       secure: SMTP_PORT === 465,
+      requireTLS: SMTP_PORT === 587,
+      ignoreTLS: false,
+      tls: {
+        rejectUnauthorized: false,
+        servername: SMTP_HOST
+      },
       auth: {
         user: SMTP_USER,
-        pass: SMTP_PASS
-      }
+        pass: SMTP_PASS.replace(/\s+/g, '')
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000
     });
     console.log('[Email] SMTP transporter initialized');
     return mailTransporter;
@@ -184,21 +194,24 @@ async function sendEmail(to, subject, text, html) {
   }
   
   try {
-    console.log('[Email] Sending email...');
+    console.log('[Email] Sending email to', to);
     const info = await mailTransporter.sendMail({
       from: SMTP_FROM,
       to,
       subject,
       text,
-      html
+      html,
+      timeout: 15000
     });
     console.log('[Email] Sent to', to, '- Message ID:', info.messageId);
     console.log('[Email] Accepted:', info.accepted);
     return { success: true, messageId: info.messageId };
   } catch (e) {
     console.error('[Email] Failed to send to', to, ':', e.message);
-    console.error('[Email] Error details:', e.code || 'no code', '- response:', e.response || 'no response');
-    return { error: e.message, details: e.code || 'unknown', response: e.response || 'no response' };
+    console.error('[Email] Error code:', e.code || 'no code');
+    console.error('[Email] Error response:', e.response || 'no response');
+    console.error('[Email] Error command:', e.command || 'no command');
+    return { error: e.message, code: e.code || 'unknown', response: e.response || 'no response' };
   }
 }
 
