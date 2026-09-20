@@ -1,21 +1,18 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { useUI } from '../store/useUI';
-import { compressPhoto, validatePhoto } from '../lib/photoCompression';
 import Icon from '../components/Icon';
 import '../index.css';
 
 export default function NewPost() {
-  const { user, ready } = useStore();
+  const { user, ready, S } = useStore();
   const toast = useUI(s => s.toast);
-  const [caption, setCaption] = useState('');
-  const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState(null);
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
-  const fileInputRef = useRef(null);
+  const [caption, setCaption] = useState('');
+  const [selectedMetric, setSelectedMetric] = useState('strength');
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState(null);
 
   // Load user profile to check for handle
   useEffect(() => {
@@ -43,7 +40,90 @@ export default function NewPost() {
     }
   }, [user, ready]);
 
-  // Show loading state while app boots or profile data loads
+  // Get latest workout stats
+  const getLatestStats = () => {
+    if (!S.workouts || S.workouts.length === 0) return null;
+    
+    const latestWorkout = S.workouts[S.workouts.length - 1];
+    if (!latestWorkout) return null;
+
+    let totalVolume = 0;
+    let maxWeight = 0;
+    let exerciseCount = 0;
+    let setCount = 0;
+
+    if (latestWorkout.entries) {
+      latestWorkout.entries.forEach(entry => {
+        if (entry.sets) {
+          setCount += entry.sets.length;
+          exerciseCount++;
+          
+          entry.sets.forEach(set => {
+            if (set.w && set.r) {
+              totalVolume += (set.w * set.r);
+              maxWeight = Math.max(maxWeight, set.w);
+            }
+          });
+        }
+      });
+    }
+
+    return {
+      date: latestWorkout.d,
+      volume: totalVolume,
+      maxWeight,
+      exercises: exerciseCount,
+      sets: setCount,
+      duration: latestWorkout.min || 0
+    };
+  };
+
+  const stats = getLatestStats();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!stats) {
+      toast('No workout data to share');
+      return;
+    }
+
+    setPosting(true);
+    setError(null);
+
+    try {
+      const postRes = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'stats',
+          metric: selectedMetric,
+          stats: {
+            date: stats.date,
+            volume: stats.volume,
+            maxWeight: stats.maxWeight,
+            exercises: stats.exercises,
+            sets: stats.sets,
+            duration: stats.duration
+          },
+          caption: caption.trim()
+        })
+      });
+      
+      const postData = await postRes.json();
+      if (!postRes.ok) throw new Error(postData.error || 'Failed to create post');
+      
+      toast('Stats shared!');
+      // Navigate back to feed
+      window.location.hash = '#/feed';
+    } catch (e) {
+      setError(e.message);
+      toast(e.message);
+      setPosting(false);
+    }
+  };
+
+  // Show loading state while app boots or profile loads
   if (!ready || profileLoading) {
     return (
       <div className="narrow">
@@ -54,81 +134,6 @@ export default function NewPost() {
     );
   }
 
-  const handlePhotoSelect = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validation = validatePhoto(file);
-    if (!validation.valid) {
-      toast(validation.error);
-      return;
-    }
-
-    setError(null);
-    setPhoto(file);
-    
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => setPhotoPreview(e.target.result);
-    reader.readAsDataURL(file);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!photo) {
-      toast('Please select a photo');
-      return;
-    }
-
-    setUploading(true);
-    setError(null);
-
-    try {
-      // Compress photo
-      const compressed = await compressPhoto(photo);
-      
-      // Upload photo with base64 JSON
-      const uploadRes = await fetch('/api/upload/photo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: compressed })
-      });
-      
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(uploadData.error || 'Failed to upload photo');
-      
-      // Create post
-      const postRes = await fetch('/api/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          photoId: uploadData.photoId,
-          caption: caption.trim()
-        })
-      });
-      
-      const postData = await postRes.json();
-      if (!postRes.ok) throw new Error(postData.error || 'Failed to create post');
-      
-      toast('Post shared!');
-      // Navigate back to feed
-      window.location.hash = '#/feed';
-    } catch (e) {
-      setError(e.message);
-      toast(e.message);
-      setUploading(false);
-    }
-  };
-
-  const handleRemovePhoto = () => {
-    setPhoto(null);
-    setPhotoPreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
   if (!profile?.handle) {
     return (
       <div className="narrow">
@@ -136,12 +141,32 @@ export default function NewPost() {
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
             <Icon name="person" style={{ fontSize: 48, color: 'var(--label-3)', opacity: 0.3 }} />
           </div>
-          <p style={{ marginBottom: 14, color: 'var(--label-3)' }}>Set up your handle first to create posts</p>
+          <p style={{ marginBottom: 14, color: 'var(--label-3)' }}>Set up your handle first to share stats</p>
           <a 
             href="#/settings" 
             className="btn primary sm"
           >
             Go to Settings
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <div className="narrow">
+        <div className="card" style={{ marginBottom: 14, textAlign: 'center', padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+            <Icon name="chart" style={{ fontSize: 48, color: 'var(--label-3)', opacity: 0.3 }} />
+          </div>
+          <p style={{ marginBottom: 14, color: 'var(--label-3)', fontWeight: 600 }}>No workout to share</p>
+          <p style={{ marginBottom: 14, color: 'var(--label-3)', fontSize: 13 }}>Complete a workout first to share your stats</p>
+          <a 
+            href="#/home" 
+            className="btn primary sm"
+          >
+            Start Workout
           </a>
         </div>
       </div>
@@ -160,7 +185,7 @@ export default function NewPost() {
         >
           <Icon name="chevronLeft" />
         </button>
-        <h1 style={{ fontSize: 28, fontWeight: 750, margin: 0, flex: 1 }}>New Post</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 750, margin: 0, flex: 1 }}>Share Stats</h1>
         <div style={{ width: 24 }} />
       </div>
 
@@ -174,86 +199,89 @@ export default function NewPost() {
       )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* Photo Upload */}
-        {!photoPreview ? (
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className="card"
-            style={{
-              padding: 32,
-              textAlign: 'center',
-              cursor: 'pointer',
-              border: '1px dashed var(--sep)',
-              transition: 'border 140ms',
-              margin: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--acc)'}
-            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--sep)'}
-          >
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
-              <Icon name="image" style={{ fontSize: 48, color: 'var(--label-3)', opacity: 0.3 }} />
+        {/* Stats Card */}
+        <div className="card" style={{ margin: 0 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--label-2)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Workout Summary</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: 'var(--r)' }}>
+                <div style={{ fontSize: 12, color: 'var(--label-2)', marginBottom: 4 }}>Total Volume</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--label)' }}>{stats.volume.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: 'var(--label-3)', marginTop: 2 }}>lbs</div>
+              </div>
+              <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: 'var(--r)' }}>
+                <div style={{ fontSize: 12, color: 'var(--label-2)', marginBottom: 4 }}>Max Weight</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--label)' }}>{stats.maxWeight.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: 'var(--label-3)', marginTop: 2 }}>lbs</div>
+              </div>
+              <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: 'var(--r)' }}>
+                <div style={{ fontSize: 12, color: 'var(--label-2)', marginBottom: 4 }}>Exercises</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--label)' }}>{stats.exercises}</div>
+                <div style={{ fontSize: 11, color: 'var(--label-3)', marginTop: 2 }}>completed</div>
+              </div>
+              <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: 'var(--r)' }}>
+                <div style={{ fontSize: 12, color: 'var(--label-2)', marginBottom: 4 }}>Duration</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--label)' }}>{stats.duration}</div>
+                <div style={{ fontSize: 11, color: 'var(--label-3)', marginTop: 2 }}>minutes</div>
+              </div>
             </div>
-            <p style={{ margin: '0 0 6px 0', color: 'var(--label-3)', fontSize: 16, fontWeight: 500 }}>
-              Tap to select a photo
-            </p>
-            <p style={{ 
-              fontSize: 13, 
-              color: 'var(--label-3)', 
-              margin: 0,
-              opacity: 0.7
-            }}>
-              Photos will be compressed automatically
-            </p>
           </div>
-        ) : (
-          <div className="card" style={{ padding: 0, overflow: 'hidden', position: 'relative', margin: 0 }}>
-            <img 
-              src={photoPreview} 
-              alt="Preview"
-              style={{ 
-                width: '100%',
-                display: 'block',
-                aspectRatio: '1'
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleRemovePhoto}
-              style={{
-                position: 'absolute',
-                top: 12,
-                right: 12,
-                background: 'rgba(0, 0, 0, 0.7)',
-                border: 'none',
-                color: 'white',
-                width: 36,
-                height: 36,
-                borderRadius: '50%',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 18,
-                transition: 'background 140ms'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.9)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)'}
-            >
-              <Icon name="xmark" />
-            </button>
-          </div>
-        )}
+        </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/jpg,image/png,image/webp"
-          onChange={handlePhotoSelect}
-          style={{ display: 'none' }}
-        />
+        {/* Metric Selection */}
+        <div className="card" style={{ margin: 0 }}>
+          <label style={{ 
+            display: 'block',
+            marginBottom: 10,
+            fontWeight: 600,
+            fontSize: 14,
+            color: 'var(--label)'
+          }}>
+            Highlight Metric
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[
+              { id: 'volume', label: 'Total Volume', icon: 'barbell' },
+              { id: 'strength', label: 'Max Weight', icon: 'dumbbell' },
+              { id: 'endurance', label: 'Exercises', icon: 'fire' },
+              { id: 'duration', label: 'Duration', icon: 'timer' }
+            ].map(metric => (
+              <button
+                key={metric.id}
+                type="button"
+                onClick={() => setSelectedMetric(metric.id)}
+                style={{
+                  padding: '12px',
+                  background: selectedMetric === metric.id ? 'var(--acc)' : 'var(--surface-2)',
+                  color: selectedMetric === metric.id ? 'var(--on-acc)' : 'var(--label)',
+                  border: 'none',
+                  borderRadius: 'var(--r)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  transition: 'all 140ms',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedMetric !== metric.id) {
+                    e.currentTarget.style.background = 'var(--surface-3)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedMetric !== metric.id) {
+                    e.currentTarget.style.background = 'var(--surface-2)';
+                  }
+                }}
+              >
+                <Icon name={metric.icon} style={{ fontSize: 16 }} />
+                {metric.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Caption */}
         <div className="card" style={{ padding: 16, margin: 0 }}>
@@ -269,7 +297,7 @@ export default function NewPost() {
           <textarea
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
-            placeholder="Share something about your workout..."
+            placeholder="How are you feeling? Any PRs or achievements?"
             maxLength={500}
             style={{
               width: '100%',
@@ -299,18 +327,18 @@ export default function NewPost() {
         {/* Submit button */}
         <button
           type="submit"
-          disabled={!photo || uploading}
-          className={`btn ${photo && !uploading ? 'primary' : 'ghost'}`}
+          disabled={posting}
+          className={`btn ${!posting ? 'primary' : 'ghost'}`}
           style={{
             width: '100%',
             height: 46,
             fontSize: 15,
             fontWeight: 600,
-            opacity: photo && !uploading ? 1 : 0.5,
+            opacity: !posting ? 1 : 0.5,
             margin: 0
           }}
         >
-          {uploading ? 'Posting...' : 'Share Post'}
+          {posting ? 'Sharing...' : 'Share Stats'}
         </button>
       </form>
     </div>

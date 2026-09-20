@@ -1160,19 +1160,28 @@ const routes = {
     
     const body = await readBody(req);
     const caption = String(body.caption || '').trim().slice(0, 500);
-    const photoId = String(body.photoId || '').trim();
+    const type = String(body.type || 'stats').trim();
+    const metric = String(body.metric || 'strength').trim();
+    const stats = body.stats || {};
     
-    if (!photoId) return json(res, 400, { error: 'photo required' });
-    
-    // Verify photo belongs to user
-    const photo = await collections.userPhotos.findOne({ photoId, userId: user.id });
-    if (!photo) return json(res, 404, { error: 'photo not found' });
+    if (!stats || typeof stats !== 'object') {
+      return json(res, 400, { error: 'stats required' });
+    }
     
     const postId = crypto.randomBytes(12).toString('base64url');
     const post = {
       postId,
       userId: user.id,
-      photoId,
+      type,
+      metric,
+      stats: {
+        date: stats.date,
+        volume: stats.volume || 0,
+        maxWeight: stats.maxWeight || 0,
+        exercises: stats.exercises || 0,
+        sets: stats.sets || 0,
+        duration: stats.duration || 0
+      },
       caption,
       created: new Date().toISOString(),
       likeCount: 0
@@ -1288,6 +1297,9 @@ const routes = {
       return {
         postId: p.postId,
         userId: p.userId,
+        type: p.type || 'stats',
+        metric: p.metric,
+        stats: p.stats,
         photoId: p.photoId,
         caption: p.caption,
         created: p.created,

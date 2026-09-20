@@ -57,16 +57,12 @@ export default function Feed() {
   };
 
   const handleDelete = async (postId) => {
-    if (!confirm('Delete this post?')) return;
-    
     try {
       const res = await fetch(`/api/posts/${postId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete post');
-      
       setPosts(prev => prev.filter(p => p.postId !== postId));
     } catch (e) {
       console.error('Delete error:', e);
-      alert('Failed to delete post');
     }
   };
 
@@ -75,28 +71,17 @@ export default function Feed() {
   }, []);
 
   useEffect(() => {
-    if (!hasMore || loading) return;
-    
-    const options = {
-      root: null,
-      rootMargin: '100px',
-      threshold: 0.1
-    };
-    
-    observerRef.current = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && hasMore && !loading) {
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore && !loading && posts.length > 0) {
         const lastPost = posts[posts.length - 1];
-        if (lastPost) {
-          setLoading(true);
-          loadFeed(lastPost.created);
-        }
+        loadFeed(lastPost.created);
       }
-    }, options);
-    
+    });
+
     if (loadingRef.current) {
-      observerRef.current.observe(loadingRef.current);
+      observer.observe(loadingRef.current);
     }
-    
+
     return () => {
       if (observerRef.current) {
         observerRef.current.disconnect();
@@ -106,28 +91,19 @@ export default function Feed() {
 
   return (
     <div className="narrow">
-      {/* Under Construction Banner */}
-      <div className="card" style={{ marginBottom: 16, background: 'color-mix(in srgb, var(--yellow) 14%, transparent)', color: 'var(--yellow)', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Icon name="construction" style={{ flexShrink: 0, fontSize: 20 }} />
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Under Construction</div>
-          <div style={{ fontSize: 13, marginTop: 2, opacity: 0.8 }}>Feed features coming soon</div>
-        </div>
-      </div>
-
       {/* Header */}
       <div className="hdr" style={{ marginBottom: 14 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 750 }}>Feed</h1>
           <div className="sub" style={{ fontSize: 13.5, marginTop: 2 }}>
-            Posts from those you follow
+            Workout stats from people you follow
           </div>
         </div>
         <button
           className="iconbtn"
           onClick={() => window.location.hash = '#/new-post'}
-          aria-label="New post"
-          title="New post"
+          aria-label="Share stats"
+          title="Share stats"
         >
           <Icon name="plusCircle" />
         </button>
@@ -154,9 +130,9 @@ export default function Feed() {
           <div style={{ marginBottom: 14, display: 'flex', justifyContent: 'center' }}>
             <Icon name="users" style={{ fontSize: 48, color: 'var(--label-3)', opacity: 0.3 }} />
           </div>
-          <div style={{ color: 'var(--label-3)', marginBottom: 8 }}>No posts yet</div>
+          <div style={{ color: 'var(--label-3)', marginBottom: 8 }}>No stats shared yet</div>
           <div style={{ color: 'var(--label-3)', fontSize: 13, marginBottom: 16 }}>
-            Follow people to see their gym posts
+            Follow people to see their workout stats
           </div>
           <button
             className="btn primary sm"
@@ -168,7 +144,7 @@ export default function Feed() {
       ) : (
         <>
           {posts.map(post => (
-            <PostCard 
+            <StatsCard 
               key={post.postId} 
               post={post} 
               currentUserId={user?.id}
@@ -188,7 +164,7 @@ export default function Feed() {
   );
 }
 
-function PostCard({ post, currentUserId, onLike, onDelete }) {
+function StatsCard({ post, currentUserId, onLike, onDelete }) {
   const formatDate = (iso) => {
     const date = new Date(iso);
     const now = Date.now();
@@ -205,123 +181,178 @@ function PostCard({ post, currentUserId, onLike, onDelete }) {
     return date.toLocaleDateString();
   };
 
+  const getMetricLabel = (metric) => {
+    const labels = {
+      volume: 'Total Volume',
+      strength: 'Max Weight',
+      endurance: 'Exercises',
+      duration: 'Duration'
+    };
+    return labels[metric] || metric;
+  };
+
+  const getMetricValue = (metric, stats) => {
+    if (!stats) return '0';
+    switch(metric) {
+      case 'volume':
+        return `${(stats.volume || 0).toLocaleString()} lbs`;
+      case 'strength':
+        return `${stats.maxWeight || 0} lbs`;
+      case 'endurance':
+        return `${stats.exercises || 0} exercises`;
+      case 'duration':
+        return `${stats.duration || 0} min`;
+      default:
+        return '';
+    }
+  };
+
+  const getMetricIcon = (metric) => {
+    const icons = {
+      volume: 'barbell',
+      strength: 'dumbbell',
+      endurance: 'flame',
+      duration: 'timer'
+    };
+    return icons[metric] || 'chart';
+  };
+
+  // Guard against undefined stats
+  if (!post.stats) {
+    return null;
+  }
+
+  const stats = post.stats || {};
+
   return (
-    <div className="card" style={{ marginBottom: 14 }}>
+    <div className="card" style={{ marginBottom: 16 }}>
       {/* Header */}
-      <div className="row between" style={{ marginBottom: 10, alignItems: 'flex-start' }}>
-        <a 
-          href={`#/profile/${post.user?.handle}`}
-          style={{ 
-            display: 'flex',
-            alignItems: 'center',
-            textDecoration: 'none',
-            color: 'inherit',
-            flex: 1,
-            minWidth: 0
-          }}
-        >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 40,
             height: 40,
             borderRadius: '50%',
-            background: 'var(--surface-2)',
-            marginRight: 10,
-            overflow: 'hidden',
-            flexShrink: 0
+            background: 'var(--acc-soft)',
+            color: 'var(--acc)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18
           }}>
-            {post.user?.profilePhoto ? (
-              <img 
-                src={`/photo/${post.user.profilePhoto}/thumb`} 
-                alt={post.user.name}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            ) : (
-              <div style={{ 
-                width: '100%', 
-                height: '100%', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                fontWeight: 600,
-                color: 'var(--label-3)',
-                fontSize: 16
-              }}>
-                {post.user?.name?.charAt(0).toUpperCase()}
-              </div>
-            )}
+            <Icon name="figureStrength" />
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 15 }}>{post.user?.name}</div>
-            <div style={{ fontSize: 13, color: 'var(--label-3)', marginTop: 2 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--label)' }}>
+              {post.user?.name || 'Unknown'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--label-3)', marginTop: 2 }}>
               @{post.user?.handle} · {formatDate(post.created)}
             </div>
           </div>
-        </a>
-        
-        {currentUserId === post.userId && (
+        </div>
+        {post.userId === currentUserId && (
           <button
             onClick={() => onDelete(post.postId)}
-            className="iconbtn"
-            style={{ marginLeft: 8 }}
-            title="Delete post"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--label-3)',
+              cursor: 'pointer',
+              padding: 8,
+              fontSize: 16
+            }}
           >
             <Icon name="trash" />
           </button>
         )}
       </div>
 
-      {/* Photo */}
-      <div style={{ 
-        marginBottom: 10,
+      {/* Main Stat Highlight */}
+      <div style={{
+        background: 'var(--acc-soft)',
+        padding: '16px',
         borderRadius: 'var(--r)',
-        overflow: 'hidden',
-        background: 'var(--surface-2)'
+        marginBottom: 12,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12
       }}>
-        <img 
-          src={`/photo/${post.photoId}`}
-          alt="Post"
-          style={{ 
-            width: '100%',
-            display: 'block',
-            aspectRatio: '1'
-          }}
-          loading="lazy"
-        />
+        <div style={{
+          fontSize: 28,
+          color: 'var(--acc)'
+        }}>
+          <Icon name={getMetricIcon(post.metric)} />
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--acc)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+            {getMetricLabel(post.metric)}
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--acc)', marginTop: 2 }}>
+            {getMetricValue(post.metric, stats)}
+          </div>
+        </div>
       </div>
 
-      {/* Actions */}
-      <div style={{ marginBottom: 10 }}>
-        <button
-          onClick={() => onLike(post.postId, post.liked)}
-          className="iconbtn"
-          style={{ 
-            color: post.liked ? 'var(--red)' : 'var(--label)',
-            gap: 4,
-            display: 'flex',
-            alignItems: 'center',
-            fontSize: 15
-          }}
-          title={post.liked ? 'Unlike' : 'Like'}
-        >
-          <Icon name={post.liked ? 'heartFill' : 'heart'} style={{ fontSize: 20 }} />
-          {post.likeCount > 0 && (
-            <span style={{ fontSize: 13, fontWeight: 600 }}>
-              {post.likeCount}
-            </span>
-          )}
-        </button>
+      {/* Summary Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+        <div style={{ padding: '10px', background: 'var(--surface-2)', borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--label-2)', marginBottom: 4 }}>Volume</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--label)' }}>
+            {(stats.volume || 0).toLocaleString()} lbs
+          </div>
+        </div>
+        <div style={{ padding: '10px', background: 'var(--surface-2)', borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--label-2)', marginBottom: 4 }}>Max Weight</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--label)' }}>
+            {stats.maxWeight || 0} lbs
+          </div>
+        </div>
+        <div style={{ padding: '10px', background: 'var(--surface-2)', borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--label-2)', marginBottom: 4 }}>Exercises</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--label)' }}>
+            {stats.exercises || 0}
+          </div>
+        </div>
+        <div style={{ padding: '10px', background: 'var(--surface-2)', borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--label-2)', marginBottom: 4 }}>Duration</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--label)' }}>
+            {stats.duration || 0} min
+          </div>
+        </div>
       </div>
 
       {/* Caption */}
       {post.caption && (
-        <div style={{ lineHeight: 1.5, fontSize: 15, color: 'var(--label)' }}>
-          <span style={{ fontWeight: 600, color: 'var(--acc)' }}>
-            @{post.user?.handle}
-          </span>
-          {' '}
+        <div style={{ fontSize: 14, color: 'var(--label)', marginBottom: 12, lineHeight: 1.4 }}>
           {post.caption}
         </div>
       )}
+
+      {/* Actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderTop: '0.5px solid var(--sep)', paddingTop: 12 }}>
+        <button
+          onClick={() => onLike(post.postId, post.liked)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: post.liked ? 'var(--red)' : 'var(--label-2)',
+            cursor: 'pointer',
+            padding: 8,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 14,
+            fontWeight: 500,
+            transition: 'color 140ms'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = post.liked ? 'var(--red)' : 'var(--label)'}
+          onMouseLeave={(e) => e.currentTarget.style.color = post.liked ? 'var(--red)' : 'var(--label-2)'}
+        >
+          <Icon name={post.liked ? 'heartFill' : 'heart'} />
+          {post.likeCount > 0 && <span>{post.likeCount}</span>}
+        </button>
+      </div>
     </div>
   );
 }
