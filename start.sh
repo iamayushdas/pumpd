@@ -25,6 +25,13 @@ export DATA_DIR=${DATA_DIR:-$PROJECT_DIR/data}
 export MONGO_URI=$MONGO_URI
 export MONGO_DB=${MONGO_DB:-pumpd}
 
+# Export email/SMTP variables if set
+export SMTP_HOST=${SMTP_HOST:-}
+export SMTP_PORT=${SMTP_PORT:-587}
+export SMTP_USER=${SMTP_USER:-}
+export SMTP_PASS=${SMTP_PASS:-}
+export SMTP_FROM=${SMTP_FROM:-pumpd <noreply@localhost>}
+
 # Validate MongoDB URI
 if [ -z "$MONGO_URI" ] || [ "$MONGO_URI" = "your_mongodb_connection_string_here" ]; then
     echo "❌ MONGO_URI not configured in .env"

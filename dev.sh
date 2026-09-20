@@ -15,6 +15,13 @@ if [ -f "$PROJECT_DIR/.env" ]; then
   set +a
 fi
 
+# Ensure SMTP variables are exported
+export SMTP_HOST=${SMTP_HOST:-}
+export SMTP_PORT=${SMTP_PORT:-587}
+export SMTP_USER=${SMTP_USER:-}
+export SMTP_PASS=${SMTP_PASS:-}
+export SMTP_FROM=${SMTP_FROM:-pumpd <noreply@localhost>}
+
 # Set defaults if not in .env
 export RP_ID=${RP_ID:-localhost}
 export ORIGIN=${ORIGIN:-http://localhost:$FRONTEND_PORT}
