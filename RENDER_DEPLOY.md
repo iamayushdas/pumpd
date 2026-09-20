@@ -12,9 +12,10 @@ This guide will help you deploy pumpd to Render.com.
 
 1. Go to [MongoDB Atlas](https://cloud.mongodb.com)
 2. Create a cluster (free tier works)
-3. Click **Connect** → **Drivers**
-4. Copy your connection string (e.g., `mongodb+srv://username:password@cluster.mongodb.net/`)
-5. **Important**: Make sure to replace `<password>` with your actual password
+3. Go to **Network Access** → **Add IP Address** → choose **Allow Access From Anywhere** (`0.0.0.0/0`) (required for Render to connect)
+4. Click **Connect** → **Drivers**
+5. Copy your connection string (e.g., `mongodb+srv://username:password@cluster.mongodb.net/`)
+6. **Important**: Replace `<password>` with your actual password (URL-encode special characters like `@` as `%40`)
 
 ## Step 2: Migrate Exercise Data (One-time)
 

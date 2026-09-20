@@ -22,7 +22,7 @@ WORKDIR /app
 
 # Install API dependencies
 COPY api/package*.json ./api/
-RUN cd api && npm ci --only=production
+RUN cd api && npm ci --omit=dev
 
 # Copy API source
 COPY api/ ./api/

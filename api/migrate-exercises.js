@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
 
-// Read .env
-let MONGO_URI = 'mongodb://localhost:27017';
-let MONGO_DB = 'pumpd';
+// Read .env or environment variables
+let MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017';
+let MONGO_DB = process.env.MONGO_DB || 'pumpd';
 
 const envPath = path.join(projectRoot, '.env');
 if (fs.existsSync(envPath)) {
@@ -19,8 +19,8 @@ if (fs.existsSync(envPath)) {
     if (!trimmed || trimmed.startsWith('#')) continue;
     const [k, ...v] = trimmed.split('=');
     const val = v.join('=');
-    if (k === 'MONGO_URI') MONGO_URI = val;
-    if (k === 'MONGO_DB') MONGO_DB = val;
+    if (k === 'MONGO_URI' && !process.env.MONGO_URI) MONGO_URI = val;
+    if (k === 'MONGO_DB' && !process.env.MONGO_DB) MONGO_DB = val;
   }
 }
 

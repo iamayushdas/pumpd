@@ -4,6 +4,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { MongoClient, ObjectId } from 'mongodb';
 import {
   generateRegistrationOptions, verifyRegistrationResponse,
@@ -744,7 +745,8 @@ async function main() {
       }
       
       // Serve static frontend files (production only)
-      const FRONTEND_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'frontend', 'dist');
+      const __dirname = path.dirname(fileURLToPath(import.meta.url));
+      const FRONTEND_DIR = path.join(__dirname, '..', 'frontend', 'dist');
       if (fs.existsSync(FRONTEND_DIR) && req.method === 'GET') {
         let filePath = path.join(FRONTEND_DIR, pathname === '/' ? 'index.html' : pathname);
         
@@ -780,7 +782,7 @@ async function main() {
       }
       
       json(res, 404, { error: 'not found' });
-    }).listen(PORT, () => console.log(`gym-api on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN}, db=${MONGO_DB})`));
+    }).listen(PORT, '0.0.0.0', () => console.log(`gym-api on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN}, db=${MONGO_DB})`));
   } catch (e) {
     console.error('Failed to start server:', e.message);
     process.exit(1);

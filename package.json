@@ -5,8 +5,10 @@
   "description": "Self-hosted gym & bodyweight tracker",
   "license": "AGPL-3.0-or-later",
   "scripts": {
+    "build": "npm --prefix api install --omit=dev && npm --prefix frontend install && npm --prefix frontend run build",
+    "start": "node api/server.js",
+    "dev": "bash start.sh",
     "setup": "bash setup.sh",
-    "start": "bash start.sh",
     "migrate": "cd api && node migrate-exercises.js",
     "test": "cd frontend && npm test"
   },
