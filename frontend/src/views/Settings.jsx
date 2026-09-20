@@ -13,6 +13,7 @@ import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
 import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
+import { ProfileSettings } from '../components/ProfileSettings.jsx'
 
 export default function Settings() {
   const nav = useNavigate()
@@ -119,30 +120,30 @@ export default function Settings() {
         </button>
       </div>
 
-      {/* Hero Account Profile Card */}
-      <div className="settings-profile-card">
-        <div className="row" style={{ gap: 14, alignItems: 'center' }}>
-          <div className="settings-avatar">
-            <Icon name={user ? 'personCircle' : MOBILE ? 'lock' : 'sparkles'} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-              <span className="settings-profile-name">
-                {user ? user.name : MOBILE ? t('Local Mobile Profile') : DEMO ? t('Demo Account') : t('Guest User')}
-              </span>
-              {user && <span className="settings-status-tag">{t('Passkey')}</span>}
-            </div>
-            <div className="settings-profile-sub">
-              {user
-                ? t('Data securely synced to your self-hosted instance')
-                : MOBILE
-                  ? t('All workout data is stored locally on this phone')
-                  : DEMO
-                    ? t('Running on browser memory — reset anytime')
-                    : t('Data stored in this browser · Create a passkey to sync')}
-            </div>
-          </div>
-        </div>
+       {/* Hero Account Profile Card */}
+       <div className="settings-profile-card">
+         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+           <div className="settings-avatar">
+             <Icon name={user ? 'personCircle' : MOBILE ? 'lock' : 'sparkles'} />
+           </div>
+           <div style={{ flex: 1, minWidth: 0 }}>
+             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+               <span className="settings-profile-name">
+                 {user ? user.name : MOBILE ? t('Local Mobile Profile') : DEMO ? t('Demo Account') : t('Guest User')}
+               </span>
+               {user && <span className="settings-status-tag">{t('Passkey')}</span>}
+             </div>
+             <div className="settings-profile-sub">
+               {user
+                 ? t('Data securely synced to your self-hosted instance')
+                 : MOBILE
+                   ? t('All workout data is stored locally on this phone')
+                   : DEMO
+                     ? t('Running on browser memory — reset anytime')
+                     : t('Data stored in this browser · Create a passkey to sync')}
+             </div>
+           </div>
+         </div>
 
         {/* Profile Action Buttons */}
         {!user && !DEMO && !MOBILE && webauthnOK() && (
@@ -181,6 +182,9 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {/* ---------- Social Profile ---------- */}
+      <ProfileSettings />
 
       {/* ---------- Workout Experience ---------- */}
       <Section

@@ -12,6 +12,7 @@ import {
 } from '@simplewebauthn/server';
 import webpush from 'web-push';
 import sgMail from '@sendgrid/mail';
+import sharp from 'sharp';
 
 const PORT = +(process.env.PORT || 3000);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017';
@@ -53,7 +54,11 @@ let collections = {
   userStates: null,
   exercises: null,
   media: null,
-  accessRequests: null
+  accessRequests: null,
+  posts: null,
+  follows: null,
+  likes: null,
+  userPhotos: null
 };
 
 async function connectMongo() {
@@ -77,9 +82,14 @@ async function connectMongo() {
   collections.exercises = db.collection('exercises');
   collections.media = db.collection('exercise_media');
   collections.accessRequests = db.collection('accessRequests');
+  collections.posts = db.collection('posts');
+  collections.follows = db.collection('follows');
+  collections.likes = db.collection('likes');
+  collections.userPhotos = db.collection('userPhotos');
   
   // Create indexes
   await collections.users.createIndex({ id: 1 }, { unique: true });
+  await collections.users.createIndex({ handle: 1 }, { unique: true, sparse: true });
   await collections.credentials.createIndex({ id: 1 }, { unique: true });
   await collections.credentials.createIndex({ userId: 1 });
   await collections.subscriptions.createIndex({ userId: 1 });
@@ -90,6 +100,18 @@ async function connectMongo() {
   await collections.media.createIndex({ filename: 1 });
   await collections.accessRequests.createIndex({ email: 1 });
   await collections.accessRequests.createIndex({ status: 1 });
+  
+  // Social media indexes
+  await collections.posts.createIndex({ userId: 1, created: -1 });
+  await collections.posts.createIndex({ created: -1 });
+  await collections.follows.createIndex({ followerId: 1, followingId: 1 }, { unique: true });
+  await collections.follows.createIndex({ followerId: 1 });
+  await collections.follows.createIndex({ followingId: 1 });
+  await collections.likes.createIndex({ postId: 1, userId: 1 }, { unique: true });
+  await collections.likes.createIndex({ postId: 1 });
+  await collections.likes.createIndex({ userId: 1, created: -1 });
+  await collections.userPhotos.createIndex({ userId: 1, created: -1 });
+  await collections.userPhotos.createIndex({ photoId: 1 }, { unique: true });
   
   console.log(`✓ MongoDB connected: ${MONGO_DB}`);
 }
@@ -197,7 +219,7 @@ async function sendAccessRequestNotification(requesterEmail, requesterName, mess
 
 async function sendInviteCodeEmail(email, name, code) {
   const subject = `Your ${RP_NAME} Invite Code - Let's Get Started!`;
-  const text = `Hi ${name},\n\nGreat news! Your access request has been approved.\n\nYour invite code is: ${code}\n\nHow to get started:\n1. Visit ${ORIGIN}\n2. Click "Sign Up" or "Create Account"\n3. Enter your invite code: ${code}\n4. Set up your passkey (fingerprint, face ID, or security key)\n5. Start tracking your workouts!\n\nWelcome to ${RP_NAME}!`;
+  const text = `Hi ${name},\n\nGreat news! Your access request has been approved.\n\nYour invite code is: ${code}\n\nHow to get started:\n1. Visit ${ORIGIN}\n2. Click "New Profile" tab\n3. Enter your name\n4. Enter your invite code: ${code}\n5. Set up your passkey (fingerprint, face ID, or security key)\n6. Start tracking your workouts!\n\nWelcome to ${RP_NAME}!`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <h2 style="color: #30d158;">Welcome to ${RP_NAME}! 💪</h2>
@@ -212,7 +234,8 @@ async function sendInviteCodeEmail(email, name, code) {
       <h3 style="color: #333; font-size: 18px; margin: 30px 0 15px;">How to get started:</h3>
       <ol style="line-height: 1.8; color: #333;">
         <li>Visit <a href="${ORIGIN}" style="color: #30d158; font-weight: 600;">${ORIGIN}</a></li>
-        <li>Click <strong>"Sign Up"</strong> or <strong>"Create Account"</strong></li>
+        <li>Click the <strong>"New Profile"</strong> tab</li>
+        <li>Enter your name</li>
         <li>Enter your invite code: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 14px;">${code}</code></li>
         <li>Set up your <strong>passkey</strong> (fingerprint, face ID, or security key)</li>
         <li>Start tracking your workouts!</li>
@@ -889,6 +912,497 @@ const routes = {
     );
     
     json(res, 200, { ok: true });
+  },
+
+  /* ---------- social media: user profiles ---------- */
+  'GET /api/profile': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const followerCount = await collections.follows.countDocuments({ followingId: user.id });
+    const followingCount = await collections.follows.countDocuments({ followerId: user.id });
+    const postCount = await collections.posts.countDocuments({ userId: user.id });
+    
+    json(res, 200, {
+      profile: {
+        id: user.id,
+        name: user.name,
+        handle: user.handle || null,
+        bio: user.bio || null,
+        profilePhoto: user.profilePhoto || null,
+        followerCount,
+        followingCount,
+        postCount
+      }
+    });
+  },
+
+  'GET /api/profile/:handle': async (req, res) => {
+    const currentUser = await readSession(req);
+    const url = new URL(req.url, 'http://x');
+    const handle = url.pathname.split('/')[3];
+    
+    if (!handle) return json(res, 400, { error: 'handle required' });
+    
+    const user = await collections.users.findOne({ handle });
+    if (!user) return json(res, 404, { error: 'user not found' });
+    
+    const followerCount = await collections.follows.countDocuments({ followingId: user.id });
+    const followingCount = await collections.follows.countDocuments({ followerId: user.id });
+    const postCount = await collections.posts.countDocuments({ userId: user.id });
+    
+    let isFollowing = false;
+    if (currentUser) {
+      isFollowing = !!(await collections.follows.findOne({ followerId: currentUser.id, followingId: user.id }));
+    }
+    
+    json(res, 200, {
+      profile: {
+        id: user.id,
+        name: user.name,
+        handle: user.handle,
+        bio: user.bio || null,
+        profilePhoto: user.profilePhoto || null,
+        followerCount,
+        followingCount,
+        postCount,
+        isFollowing
+      }
+    });
+  },
+
+  'PUT /api/profile': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const body = await readBody(req);
+    const updates = {};
+    
+    // Handle validation (must be unique and alphanumeric with underscores, 3-20 chars)
+    if (body.handle !== undefined) {
+      const handle = String(body.handle || '').trim().toLowerCase();
+      if (handle) {
+        if (!/^[a-z0-9_]{3,20}$/.test(handle)) {
+          return json(res, 400, { error: 'handle must be 3-20 characters, letters, numbers, and underscores only' });
+        }
+        // Check if handle is taken
+        const existing = await collections.users.findOne({ handle, id: { $ne: user.id } });
+        if (existing) return json(res, 409, { error: 'handle already taken' });
+        updates.handle = handle;
+      } else {
+        updates.handle = null;
+      }
+    }
+    
+    if (body.bio !== undefined) {
+      updates.bio = String(body.bio || '').trim().slice(0, 200);
+    }
+    
+    if (body.profilePhoto !== undefined) {
+      updates.profilePhoto = String(body.profilePhoto || '').slice(0, 200) || null;
+    }
+    
+    if (Object.keys(updates).length === 0) {
+      return json(res, 400, { error: 'no updates provided' });
+    }
+    
+    await collections.users.updateOne({ id: user.id }, { $set: updates });
+    
+    json(res, 200, { ok: true, updates });
+  },
+
+  'GET /api/users/search': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const url = new URL(req.url, 'http://x');
+    const q = url.searchParams.get('q') || '';
+    const limit = Math.min(50, Math.max(1, +(url.searchParams.get('limit') || 20)));
+    
+    if (!q.trim()) return json(res, 200, { users: [] });
+    
+    const query = {
+      handle: { $exists: true, $ne: null },
+      $or: [
+        { handle: new RegExp(q, 'i') },
+        { name: new RegExp(q, 'i') }
+      ]
+    };
+    
+    const users = await collections.users.find(query).limit(limit).toArray();
+    
+    const result = await Promise.all(users.map(async u => {
+      const followerCount = await collections.follows.countDocuments({ followingId: u.id });
+      const isFollowing = !!(await collections.follows.findOne({ followerId: user.id, followingId: u.id }));
+      
+      return {
+        id: u.id,
+        name: u.name,
+        handle: u.handle,
+        bio: u.bio || null,
+        profilePhoto: u.profilePhoto || null,
+        followerCount,
+        isFollowing
+      };
+    }));
+    
+    json(res, 200, { users: result });
+  },
+
+  /* ---------- social media: follow system ---------- */
+  'POST /api/follow': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const body = await readBody(req);
+    const targetId = String(body.userId || '').trim();
+    
+    if (!targetId) return json(res, 400, { error: 'userId required' });
+    if (targetId === user.id) return json(res, 400, { error: 'cannot follow yourself' });
+    
+    const targetUser = await collections.users.findOne({ id: targetId });
+    if (!targetUser) return json(res, 404, { error: 'user not found' });
+    
+    // Check if already following
+    const existing = await collections.follows.findOne({ followerId: user.id, followingId: targetId });
+    if (existing) return json(res, 200, { ok: true, alreadyFollowing: true });
+    
+    await collections.follows.insertOne({
+      followerId: user.id,
+      followingId: targetId,
+      created: new Date().toISOString()
+    });
+    
+    json(res, 200, { ok: true });
+  },
+
+  'POST /api/unfollow': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const body = await readBody(req);
+    const targetId = String(body.userId || '').trim();
+    
+    if (!targetId) return json(res, 400, { error: 'userId required' });
+    
+    await collections.follows.deleteOne({ followerId: user.id, followingId: targetId });
+    
+    json(res, 200, { ok: true });
+  },
+
+  'GET /api/followers': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const url = new URL(req.url, 'http://x');
+    const userId = url.searchParams.get('userId') || user.id;
+    const limit = Math.min(100, Math.max(1, +(url.searchParams.get('limit') || 50)));
+    const offset = Math.max(0, +(url.searchParams.get('offset') || 0));
+    
+    const follows = await collections.follows.find({ followingId: userId })
+      .sort({ created: -1 })
+      .skip(offset)
+      .limit(limit)
+      .toArray();
+    
+    const followerIds = follows.map(f => f.followerId);
+    const followers = await collections.users.find({ id: { $in: followerIds } }).toArray();
+    
+    const result = await Promise.all(followers.map(async u => {
+      const isFollowing = !!(await collections.follows.findOne({ followerId: user.id, followingId: u.id }));
+      return {
+        id: u.id,
+        name: u.name,
+        handle: u.handle,
+        profilePhoto: u.profilePhoto || null,
+        isFollowing
+      };
+    }));
+    
+    json(res, 200, { followers: result, hasMore: follows.length === limit });
+  },
+
+  'GET /api/following': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const url = new URL(req.url, 'http://x');
+    const userId = url.searchParams.get('userId') || user.id;
+    const limit = Math.min(100, Math.max(1, +(url.searchParams.get('limit') || 50)));
+    const offset = Math.max(0, +(url.searchParams.get('offset') || 0));
+    
+    const follows = await collections.follows.find({ followerId: userId })
+      .sort({ created: -1 })
+      .skip(offset)
+      .limit(limit)
+      .toArray();
+    
+    const followingIds = follows.map(f => f.followingId);
+    const following = await collections.users.find({ id: { $in: followingIds } }).toArray();
+    
+    const result = following.map(u => ({
+      id: u.id,
+      name: u.name,
+      handle: u.handle,
+      profilePhoto: u.profilePhoto || null,
+      isFollowing: true
+    }));
+    
+    json(res, 200, { following: result, hasMore: follows.length === limit });
+  },
+
+  /* ---------- social media: posts ---------- */
+  'POST /api/posts': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    if (!user.handle) return json(res, 400, { error: 'set up your handle first' });
+    
+    const body = await readBody(req);
+    const caption = String(body.caption || '').trim().slice(0, 500);
+    const photoId = String(body.photoId || '').trim();
+    
+    if (!photoId) return json(res, 400, { error: 'photo required' });
+    
+    // Verify photo belongs to user
+    const photo = await collections.userPhotos.findOne({ photoId, userId: user.id });
+    if (!photo) return json(res, 404, { error: 'photo not found' });
+    
+    const postId = crypto.randomBytes(12).toString('base64url');
+    const post = {
+      postId,
+      userId: user.id,
+      photoId,
+      caption,
+      created: new Date().toISOString(),
+      likeCount: 0
+    };
+    
+    await collections.posts.insertOne(post);
+    
+    json(res, 200, {
+      post: {
+        ...post,
+        user: {
+          id: user.id,
+          name: user.name,
+          handle: user.handle,
+          profilePhoto: user.profilePhoto || null
+        },
+        liked: false
+      }
+    });
+  },
+
+  'DELETE /api/posts/:postId': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const url = new URL(req.url, 'http://x');
+    const postId = url.pathname.split('/')[3];
+    
+    if (!postId) return json(res, 400, { error: 'postId required' });
+    
+    const post = await collections.posts.findOne({ postId });
+    if (!post) return json(res, 404, { error: 'post not found' });
+    
+    if (post.userId !== user.id && !isAdmin(user)) {
+      return json(res, 403, { error: 'not authorized' });
+    }
+    
+    await collections.posts.deleteOne({ postId });
+    await collections.likes.deleteMany({ postId });
+    
+    json(res, 200, { ok: true });
+  },
+
+  'GET /api/posts': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const url = new URL(req.url, 'http://x');
+    const userId = url.searchParams.get('userId');
+    const limit = Math.min(50, Math.max(1, +(url.searchParams.get('limit') || 20)));
+    const before = url.searchParams.get('before'); // ISO timestamp for pagination
+    
+    const query = userId ? { userId } : {};
+    if (before) query.created = { $lt: before };
+    
+    const posts = await collections.posts.find(query)
+      .sort({ created: -1 })
+      .limit(limit)
+      .toArray();
+    
+    // Fetch user data and like status for each post
+    const result = await Promise.all(posts.map(async p => {
+      const author = await collections.users.findOne({ id: p.userId });
+      const liked = !!(await collections.likes.findOne({ postId: p.postId, userId: user.id }));
+      
+      return {
+        postId: p.postId,
+        userId: p.userId,
+        photoId: p.photoId,
+        caption: p.caption,
+        created: p.created,
+        likeCount: p.likeCount || 0,
+        user: author ? {
+          id: author.id,
+          name: author.name,
+          handle: author.handle,
+          profilePhoto: author.profilePhoto || null
+        } : null,
+        liked
+      };
+    }));
+    
+    json(res, 200, { posts: result, hasMore: posts.length === limit });
+  },
+
+  'GET /api/feed': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const url = new URL(req.url, 'http://x');
+    const limit = Math.min(50, Math.max(1, +(url.searchParams.get('limit') || 20)));
+    const before = url.searchParams.get('before');
+    
+    // Get users the current user follows
+    const follows = await collections.follows.find({ followerId: user.id }).toArray();
+    const followingIds = follows.map(f => f.followingId);
+    
+    // Include user's own posts in feed
+    followingIds.push(user.id);
+    
+    const query = { userId: { $in: followingIds } };
+    if (before) query.created = { $lt: before };
+    
+    const posts = await collections.posts.find(query)
+      .sort({ created: -1 })
+      .limit(limit)
+      .toArray();
+    
+    const result = await Promise.all(posts.map(async p => {
+      const author = await collections.users.findOne({ id: p.userId });
+      const liked = !!(await collections.likes.findOne({ postId: p.postId, userId: user.id }));
+      
+      return {
+        postId: p.postId,
+        userId: p.userId,
+        photoId: p.photoId,
+        caption: p.caption,
+        created: p.created,
+        likeCount: p.likeCount || 0,
+        user: author ? {
+          id: author.id,
+          name: author.name,
+          handle: author.handle,
+          profilePhoto: author.profilePhoto || null
+        } : null,
+        liked
+      };
+    }));
+    
+    json(res, 200, { posts: result, hasMore: posts.length === limit });
+  },
+
+  /* ---------- social media: likes ---------- */
+  'POST /api/posts/:postId/like': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const url = new URL(req.url, 'http://x');
+    const postId = url.pathname.split('/')[3];
+    
+    if (!postId) return json(res, 400, { error: 'postId required' });
+    
+    const post = await collections.posts.findOne({ postId });
+    if (!post) return json(res, 404, { error: 'post not found' });
+    
+    // Check if already liked
+    const existing = await collections.likes.findOne({ postId, userId: user.id });
+    if (existing) return json(res, 200, { ok: true, alreadyLiked: true });
+    
+    await collections.likes.insertOne({
+      postId,
+      userId: user.id,
+      created: new Date().toISOString()
+    });
+    
+    // Increment like count
+    await collections.posts.updateOne({ postId }, { $inc: { likeCount: 1 } });
+    
+    json(res, 200, { ok: true });
+  },
+
+  'POST /api/posts/:postId/unlike': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    const url = new URL(req.url, 'http://x');
+    const postId = url.pathname.split('/')[3];
+    
+    if (!postId) return json(res, 400, { error: 'postId required' });
+    
+    const result = await collections.likes.deleteOne({ postId, userId: user.id });
+    
+    if (result.deletedCount > 0) {
+      await collections.posts.updateOne({ postId }, { $inc: { likeCount: -1 } });
+    }
+    
+    json(res, 200, { ok: true });
+  },
+
+  /* ---------- social media: photo upload ---------- */
+  'POST /api/upload/photo': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    
+    // Read multipart/form-data or raw body
+    const contentType = req.headers['content-type'] || '';
+    
+    if (!contentType.includes('application/json')) {
+      return json(res, 400, { error: 'use JSON with base64 encoded image' });
+    }
+    
+    const body = await readBody(req);
+    const imageData = body.image; // base64 string
+    
+    if (!imageData) return json(res, 400, { error: 'image data required' });
+    
+    try {
+      // Decode base64
+      const buffer = Buffer.from(imageData, 'base64');
+      
+      // Compress image with Sharp
+      const compressed = await sharp(buffer)
+        .resize(1080, 1080, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+      
+      // Create thumbnail
+      const thumbnail = await sharp(buffer)
+        .resize(300, 300, { fit: 'cover' })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+      
+      const photoId = crypto.randomBytes(12).toString('base64url');
+      
+      // Store as base64 strings for reliable MongoDB storage/retrieval
+      await collections.userPhotos.insertOne({
+        photoId,
+        userId: user.id,
+        data: compressed.toString('base64'),
+        thumbnail: thumbnail.toString('base64'),
+        contentType: 'image/jpeg',
+        size: compressed.length,
+        created: new Date().toISOString()
+      });
+      
+      json(res, 200, { photoId, size: compressed.length });
+    } catch (e) {
+      console.error('photo upload error:', e.message);
+      json(res, 500, { error: 'failed to process image' });
+    }
   }
 };
 
@@ -969,6 +1483,34 @@ async function main() {
         }
       }
 
+      // Handle user photo routes
+      if (pathname.startsWith('/photo/')) {
+        const photoId = decodeURIComponent(pathname.replace('/photo/', ''));
+        const isThumbnail = photoId.endsWith('/thumb');
+        const cleanPhotoId = isThumbnail ? photoId.replace('/thumb', '') : photoId;
+        
+        try {
+          const photo = await collections.userPhotos.findOne({ photoId: cleanPhotoId });
+          if (!photo || !photo.data) {
+            console.error('Photo not found:', cleanPhotoId);
+            return json(res, 404, { error: 'photo not found' });
+          }
+          
+          // Decode base64 back to buffer
+          const dataStr = isThumbnail && photo.thumbnail ? photo.thumbnail : photo.data;
+          const buf = Buffer.from(dataStr, 'base64');
+          
+          res.writeHead(200, {
+            'Content-Type': photo.contentType || 'image/jpeg',
+            'Cache-Control': 'public, max-age=31536000, immutable'
+          });
+          return res.end(buf);
+        } catch (e) {
+          console.error('photo error', e.message, e.stack);
+          return json(res, 500, { error: 'server error' });
+        }
+      }
+
       // Handle single exercise detail API route
       if (pathname.startsWith('/api/exercises/')) {
         const exId = decodeURIComponent(pathname.replace('/api/exercises/', ''));
@@ -981,6 +1523,45 @@ async function main() {
         } catch (e) {
           console.error('exercise detail error', e.message);
           return json(res, 500, { error: 'server error' });
+        }
+      }
+      
+      // Handle dynamic profile routes
+      if (pathname.startsWith('/api/profile/') && req.method === 'GET') {
+        try {
+          await routes['GET /api/profile/:handle'](req, res);
+          return;
+        } catch (e) {
+          console.error('profile route error', e);
+          if (!res.headersSent) json(res, 500, { error: 'server error' });
+          return;
+        }
+      }
+      
+      // Handle dynamic post routes (delete and like/unlike)
+      if (pathname.startsWith('/api/posts/') && pathname.split('/').length === 4) {
+        const postId = pathname.split('/')[3];
+        if (req.method === 'DELETE') {
+          try {
+            await routes['DELETE /api/posts/:postId'](req, res);
+            return;
+          } catch (e) {
+            console.error('delete post error', e);
+            if (!res.headersSent) json(res, 500, { error: 'server error' });
+            return;
+          }
+        }
+      }
+      
+      if (pathname.match(/^\/api\/posts\/[^\/]+\/(like|unlike)$/) && req.method === 'POST') {
+        try {
+          const action = pathname.endsWith('/like') ? 'like' : 'unlike';
+          await routes[`POST /api/posts/:postId/${action}`](req, res);
+          return;
+        } catch (e) {
+          console.error('like/unlike error', e);
+          if (!res.headersSent) json(res, 500, { error: 'server error' });
+          return;
         }
       }
       

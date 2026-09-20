@@ -112,7 +112,13 @@ export default function Home() {
       <div className="hdr" style={{ marginBottom: 14 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 750 }}>
-            {getGreeting(user?.name)}
+            {user?.name ? (
+              <>
+                {getGreeting(null)}, <span style={{ color: 'var(--acc)' }}>{user.name}</span>
+              </>
+            ) : (
+              getGreeting(user?.name)
+            )}
           </h1>
           <div className="sub" style={{ fontSize: 13.5, marginTop: 2 }}>
             {today.toLocaleDateString(dateLocale(), {
@@ -125,10 +131,11 @@ export default function Home() {
         <div className="row" style={{ gap: 8 }}>
           <button
             className="iconbtn"
-            onClick={() => calendarSheet()}
-            aria-label={t('Calendar')}
+            onClick={() => nav('/feed')}
+            aria-label={t('Feed')}
+            title={t('Feed')}
           >
-            <Icon name="calendar" />
+            <Icon name="users" />
           </button>
           <button
             className="iconbtn"

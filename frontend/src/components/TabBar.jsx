@@ -17,6 +17,11 @@ export default function TabBar({ onStart }) {
   const on = k =>
     cur === k ||
     (cur === 'history' && k === 'stats') ||
+    (cur === 'new-post' && k === 'library') ||
+    (cur === 'profile' && k === 'library') ||
+    (cur === 'discover' && k === 'library') ||
+    (cur === 'handle-setup' && k === 'library') ||
+    (cur === 'library' && k === 'home') ||
     (cur === 'settings' && k === 'home')
 
   const startWorkout = () => {
@@ -29,6 +34,16 @@ export default function TabBar({ onStart }) {
     }
     nav('/workout')
   }
+
+  const handleCenterButton = () => {
+    if (cur === 'feed') {
+      nav('/new-post')
+    } else {
+      startWorkout()
+    }
+  }
+
+  const isFeedPage = cur === 'feed'
 
   const Tab = ({ k, icon, to, label }) => (
     <button
@@ -49,18 +64,18 @@ export default function TabBar({ onStart }) {
 
       <button
         type="button"
-        className={'start' + (S.active ? ' rec' : '')}
-        onClick={startWorkout}
-        aria-label={S.active ? t('Resume Workout') : t('Start Workout')}
+        className={'start' + (S.active && !isFeedPage ? ' rec' : '')}
+        onClick={handleCenterButton}
+        aria-label={isFeedPage ? t('New Post') : (S.active ? t('Resume Workout') : t('Start Workout'))}
       >
         <span className="cir">
-          <Icon name={S.active ? 'play' : 'dumbbell'} />
+          <Icon name={isFeedPage ? 'plus' : (S.active ? 'play' : 'dumbbell')} />
         </span>
-        <span className="lbl">{S.active ? t('Resume') : t('Start')}</span>
+        <span className="lbl">{isFeedPage ? t('Post') : (S.active ? t('Resume') : t('Start'))}</span>
       </button>
 
       <Tab k="stats" icon="chart" to="/stats" label={t('Stats')} />
-      <Tab k="library" icon="list" to="/library" label={t('Exercises')} />
+      <Tab k="library" icon="list" to="/library" label={t('Library')} />
     </nav>
   )
 }

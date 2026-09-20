@@ -81,7 +81,7 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
     ticks.forEach((tk, i) => {
       if (i % every) return
       const x = X(tk.t)
-      gridlines.push(<g key={'x' + i}>
+      gridlines.push(<g key={'xmark' + i}>
         <line x1={x} y1={P.t} x2={x} y2={H - P.b} stroke="var(--sep-op)" strokeWidth="1" strokeDasharray="2 4" />
         <text x={x} y={H - 7} textAnchor={tk.anchor || 'middle'} fontSize="9.5" fill="var(--label-2)">{tk.txt}</text>
       </g>)

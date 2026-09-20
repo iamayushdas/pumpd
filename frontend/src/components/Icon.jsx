@@ -111,7 +111,13 @@ const P = {
   history: <><path d="M4.5 12.2a7.6 7.6 0 1 0 2.5-5.6" /><path d="M4.1 4.4v4.3h4.3" /><path d="M12 8.3v4.2l3.1 1.9" /></>,
   signOut: <><path d="M14.2 4.6H7a1.9 1.9 0 0 0-1.9 1.9v11a1.9 1.9 0 0 0 1.9 1.9h7.2" /><path d="m16.8 8.4 3.6 3.6-3.6 3.6M20.4 12H10.2" /></>,
   shuffle: <><path d="M3.6 7.2h2.9c1.6 0 2.8.9 3.8 2.4l3 4.8c1 1.5 2.2 2.4 3.8 2.4h2.9M3.6 16.8h2.9c1.6 0 2.8-.9 3.8-2.4l.7-1.1M15.6 9.9l.7-1.1c1-1.5 2.2-2.4 3.8-2.4h1.9" /><path d="m17.9 4.3 2.8 2.1-2.8 2.1M17.9 14.7l2.8 2.1-2.8 2.1" /></>,
-  info: <><circle cx="12" cy="12" r="8.2" /><path d="M12 11v5.4" /><circle cx="12" cy="7.9" r=".9" fill="currentColor" stroke="none" /></>,
+   info: <><circle cx="12" cy="12" r="8.2" /><path d="M12 11v5.4" /><circle cx="12" cy="7.9" r=".9" fill="currentColor" stroke="none" /></>,
+
+   /* ---- social ---- */
+   users: <><circle cx="9.5" cy="8.2" r="3.4" /><path d="M3.2 19.8a6.3 6.3 0 0 1 12.6 0" /><path d="M15.2 5.4a3.4 3.4 0 0 1 0 5.8M17.4 13.9a6.3 6.3 0 0 1 3.4 5.9" /></>,
+   heartFill: <path d="M12 20c-.4 0-.8-.1-1-.4l-6.2-6a4.6 4.6 0 0 1 0-6.6 4.4 4.4 0 0 1 6.2 0l1 1 1-1a4.4 4.4 0 0 1 6.2 0 4.6 4.6 0 0 1 0 6.6l-6.2 6c-.2.3-.6.4-1 .4Z" fill="currentColor" stroke="none" />,
+   image: <><rect x="3.6" y="4.6" width="16.8" height="14.8" rx="2.6" /><circle cx="9" cy="9.6" r="1.6" /><path d="m4.8 16.8 4-4.4 3 3.2 3.4-3.8 4 4.4" /></>,
+   plusCircle: <><circle cx="12" cy="12" r="8.2" /><path d="M12 8.4v7.2M8.4 12h7.2" /></>,
 }
 
 // A few keys are aliases so call sites can say what they mean.

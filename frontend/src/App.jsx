@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { bindUI } from './components/ui.jsx'
@@ -25,8 +25,18 @@ import History from './views/History.jsx'
 import Library from './views/Library.jsx'
 import Settings from './views/Settings.jsx'
 import Admin from './views/Admin.jsx'
+import Feed from './views/Feed.jsx'
+import NewPost from './views/NewPost.jsx'
+import UserProfile from './views/UserProfile.jsx'
+import Discover from './views/Discover.jsx'
+import HandleSetup from './views/HandleSetup.jsx'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
+
+function ProfileWrapper() {
+  const { handle } = useParams()
+  return <UserProfile handle={handle} />
+}
 
 function applyPrefs(theme, accent) {
   const de = document.documentElement
@@ -73,6 +83,11 @@ function Shell() {
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
+              <Route path="/feed" element={<Feed />} />
+              <Route path="/new-post" element={<NewPost />} />
+              <Route path="/profile/:handle" element={<ProfileWrapper />} />
+              <Route path="/discover" element={<Discover />} />
+              <Route path="/handle-setup" element={<HandleSetup />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           )}
