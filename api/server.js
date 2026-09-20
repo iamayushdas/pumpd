@@ -175,20 +175,56 @@ async function sendEmail(to, subject, text, html) {
   }
 }
 
-async function sendInviteCodeEmail(email, name, code) {
-  const subject = `Your ${RP_NAME} Invite Code`;
-  const text = `Hi ${name},\n\nYour access request has been approved!\n\nYour invite code is: ${code}\n\nUse this code to create your account at ${ORIGIN}\n\nWelcome to ${RP_NAME}!`;
+async function sendAccessRequestNotification(requesterEmail, requesterName, message) {
+  const adminEmail = process.env.ADMIN_EMAIL || EMAIL_FROM.match(/<(.+)>/)?.[1] || EMAIL_FROM;
+  const subject = `New Access Request from ${requesterName}`;
+  const text = `New access request received!\n\nName: ${requesterName}\nEmail: ${requesterEmail}\n${message ? `Message: ${message}\n` : ''}\nReview and approve at: ${ORIGIN}/admin`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h2 style="color: #30d158;">Welcome to ${RP_NAME}!</h2>
+      <h2 style="color: #30d158;">New Access Request</h2>
+      <div style="background: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0;">
+        <p style="margin: 0 0 8px;"><strong>Name:</strong> ${requesterName}</p>
+        <p style="margin: 0 0 8px;"><strong>Email:</strong> ${requesterEmail}</p>
+        ${message ? `<p style="margin: 0;"><strong>Message:</strong> ${message}</p>` : ''}
+      </div>
+      <p><a href="${ORIGIN}/admin" style="display: inline-block; background: #30d158; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">Review Request</a></p>
+      <p style="color: #666; font-size: 14px; margin-top: 30px;">— ${RP_NAME}</p>
+    </div>
+  `;
+  
+  return sendEmail(adminEmail, subject, text, html);
+}
+
+async function sendInviteCodeEmail(email, name, code) {
+  const subject = `Your ${RP_NAME} Invite Code - Let's Get Started!`;
+  const text = `Hi ${name},\n\nGreat news! Your access request has been approved.\n\nYour invite code is: ${code}\n\nHow to get started:\n1. Visit ${ORIGIN}\n2. Click "Sign Up" or "Create Account"\n3. Enter your invite code: ${code}\n4. Set up your passkey (fingerprint, face ID, or security key)\n5. Start tracking your workouts!\n\nWelcome to ${RP_NAME}!`;
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #30d158;">Welcome to ${RP_NAME}! 💪</h2>
       <p>Hi ${name},</p>
-      <p>Your access request has been approved!</p>
+      <p>Great news! Your access request has been approved.</p>
+      
       <div style="background: #f5f5f5; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
         <p style="margin: 0 0 10px; color: #666; font-size: 14px;">Your Invite Code</p>
-        <p style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 2px; color: #000;">${code}</p>
+        <p style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 2px; color: #000; user-select: all;">${code}</p>
       </div>
-      <p>Use this code to create your account at <a href="${ORIGIN}" style="color: #30d158;">${ORIGIN}</a></p>
-      <p style="color: #666; font-size: 14px; margin-top: 30px;">Welcome aboard!<br>— The ${RP_NAME} Team</p>
+      
+      <h3 style="color: #333; font-size: 18px; margin: 30px 0 15px;">How to get started:</h3>
+      <ol style="line-height: 1.8; color: #333;">
+        <li>Visit <a href="${ORIGIN}" style="color: #30d158; font-weight: 600;">${ORIGIN}</a></li>
+        <li>Click <strong>"Sign Up"</strong> or <strong>"Create Account"</strong></li>
+        <li>Enter your invite code: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 14px;">${code}</code></li>
+        <li>Set up your <strong>passkey</strong> (fingerprint, face ID, or security key)</li>
+        <li>Start tracking your workouts!</li>
+      </ol>
+      
+      <p style="margin-top: 30px;"><a href="${ORIGIN}" style="display: inline-block; background: #30d158; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600;">Get Started →</a></p>
+      
+      <p style="color: #666; font-size: 14px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
+        Questions? Reply to this email.<br>
+        Welcome aboard!<br>
+        — The ${RP_NAME} Team
+      </p>
     </div>
   `;
   
@@ -780,6 +816,13 @@ const routes = {
     };
     
     await collections.accessRequests.insertOne(request);
+    
+    // Send email notification to admin
+    console.log('[Access Request] New request from:', name, email);
+    sendAccessRequestNotification(email, name, request.message)
+      .then(result => console.log('[Access Request] Admin notification sent:', result.success ? 'success' : 'failed'))
+      .catch(err => console.error('[Access Request] Failed to send admin notification:', err.message));
+    
     json(res, 200, { message: 'access request submitted successfully' });
   },
 
