@@ -74,11 +74,11 @@ function AccessRequestsCard({ requests, reload }) {
       confirmText: 'Approve',
       onConfirm: () => {
         approveAccessRequest(req._id)
-          .then(({ code, emailSent }) => {
+          .then(({ code, emailSent, emailError }) => {
             navigator.clipboard?.writeText(code).catch(() => {})
             const msg = emailSent 
               ? 'Approved! Code ' + code + ' sent to ' + req.email 
-              : 'Approved! Code ' + code + ' copied (email not configured)'
+              : 'Approved! Code ' + code + ' copied' + (emailError ? ' (email failed: ' + emailError + ')' : ' (email not configured)')
             toast(msg)
             reload()
           })

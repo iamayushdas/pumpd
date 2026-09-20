@@ -27,11 +27,14 @@ const MAX_BODY = 5 * 1024 * 1024;
 const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
 
 // Email configuration (supports SendGrid, Gmail SMTP, or any SMTP provider)
-const SMTP_HOST = process.env.SMTP_HOST || process.env.SMTP_RELAY_HOST || 'smtp.sendgrid.net';
+// Strip surrounding quotes and whitespace — hosting dashboards (Render, Railway, etc.)
+// may store env var values with literal quote characters, unlike shell .env files.
+const stripQuotes = s => s.trim().replace(/^["']|["']$/g, '');
+const SMTP_HOST = stripQuotes(process.env.SMTP_HOST || process.env.SMTP_RELAY_HOST || 'smtp.sendgrid.net');
 const SMTP_PORT = +(process.env.SMTP_PORT || process.env.SMTP_RELAY_PORT || 587);
-const SMTP_USER = process.env.SMTP_USER || process.env.SMTP_RELAY_USER || 'apikey';
-const SMTP_PASS = process.env.SMTP_PASS || process.env.SMTP_RELAY_PASS || process.env.SENDGRID_API_KEY || '';
-const SMTP_FROM = process.env.SMTP_FROM || process.env.SENDER || 'pumpd <noreply@localhost>';
+const SMTP_USER = stripQuotes(process.env.SMTP_USER || process.env.SMTP_RELAY_USER || 'apikey');
+const SMTP_PASS = stripQuotes(process.env.SMTP_PASS || process.env.SMTP_RELAY_PASS || process.env.SENDGRID_API_KEY || '');
+const SMTP_FROM = stripQuotes(process.env.SMTP_FROM || process.env.SENDER || 'pumpd <noreply@localhost>');
 
 // Ensure data directory exists for secrets and VAPID keys
 fs.mkdirSync(DATA, { recursive: true });
@@ -170,11 +173,17 @@ function initMailTransporter() {
         user: SMTP_USER,
         pass: SMTP_PASS.replace(/\s+/g, '')
       },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000
     });
     console.log('[Email] SMTP transporter initialized');
+
+    // Verify the connection asynchronously (don't block startup)
+    mailTransporter.verify()
+      .then(() => console.log('[Email] SMTP connection verified successfully'))
+      .catch(err => console.error('[Email] SMTP connection verification failed:', err.message));
+
     return mailTransporter;
   } catch (e) {
     console.error('[Email] Failed to initialize SMTP:', e.message, e.stack);
@@ -211,6 +220,10 @@ async function sendEmail(to, subject, text, html) {
     console.error('[Email] Error code:', e.code || 'no code');
     console.error('[Email] Error response:', e.response || 'no response');
     console.error('[Email] Error command:', e.command || 'no command');
+    // Reset transporter on connection errors so next attempt creates a fresh one
+    if (['ECONNECTION', 'ECONNREFUSED', 'ETIMEDOUT', 'ESOCKET', 'ECONNRESET'].includes(e.code)) {
+      mailTransporter = null;
+    }
     return { error: e.message, code: e.code || 'unknown', response: e.response || 'no response' };
   }
 }
