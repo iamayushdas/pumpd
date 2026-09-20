@@ -2048,3 +2048,203 @@ h4.sec{
   background:#ffffff;
   border-color:rgba(0,0,0,0.05);
 }
+
+/* ----------------------------------------------------------- splash screen -- */
+.splash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: var(--bg, #000000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: opacity, transform;
+}
+.splash-overlay.splash-exit {
+  opacity: 0;
+  transform: scale(1.04);
+  pointer-events: none;
+}
+.splash-glow {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--acc-soft, rgba(48,209,88,0.22)) 0%, transparent 70%);
+  filter: blur(50px);
+  pointer-events: none;
+  animation: splashGlowPulse 1.8s ease-in-out infinite alternate;
+}
+@keyframes splashGlowPulse {
+  0% { transform: scale(0.85); opacity: 0.5; }
+  100% { transform: scale(1.2); opacity: 0.9; }
+}
+.splash-word {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  font-size: clamp(54px, 14vw, 86px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  color: var(--label, #ffffff);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+  position: relative;
+  z-index: 1;
+}
+.splash-char {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+  animation-duration: 0.85s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: forwards;
+  opacity: 0;
+}
+.char-p1 {
+  animation-name: flowInP1;
+}
+.char-u {
+  animation-name: flowInU;
+  animation-delay: 0.08s;
+}
+.char-m {
+  animation-name: flowInM;
+  animation-delay: 0.16s;
+}
+.char-p2 {
+  animation-name: flowInP2;
+  animation-delay: 0.24s;
+}
+.char-d {
+  animation-name: flowInD;
+  animation-delay: 0.32s;
+}
+.char-dot {
+  color: var(--acc, #30d158);
+  animation-name: flowInDot;
+  animation-delay: 0.44s;
+}
+
+@keyframes flowInP1 {
+  0% {
+    opacity: 0;
+    transform: translate3d(-140px, -80px, 0) rotate(-28deg) scale(0.3);
+    filter: blur(8px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  85% {
+    transform: translate3d(2px, 0px, 0) rotate(2deg) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes flowInU {
+  0% {
+    opacity: 0;
+    transform: translate3d(-80px, 120px, 0) rotate(24deg) scale(0.3);
+    filter: blur(8px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  85% {
+    transform: translate3d(-1px, -2px, 0) rotate(-2deg) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes flowInM {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -140px, 0) rotate(-14deg) scale(0.2);
+    filter: blur(10px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  85% {
+    transform: translate3d(0, 2px, 0) rotate(1deg) scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes flowInP2 {
+  0% {
+    opacity: 0;
+    transform: translate3d(90px, 130px, 0) rotate(-22deg) scale(0.3);
+    filter: blur(8px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  85% {
+    transform: translate3d(1px, -2px, 0) rotate(2deg) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes flowInD {
+  0% {
+    opacity: 0;
+    transform: translate3d(140px, -90px, 0) rotate(26deg) scale(0.3);
+    filter: blur(8px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  85% {
+    transform: translate3d(-2px, 1px, 0) rotate(-1deg) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes flowInDot {
+  0% {
+    opacity: 0;
+    transform: translate3d(60px, -150px, 0) scale(0);
+    filter: blur(6px);
+  }
+  60% {
+    opacity: 1;
+    transform: translate3d(0, 4px, 0) scale(1.4);
+    filter: drop-shadow(0 0 16px var(--acc, #30d158));
+  }
+  80% {
+    transform: translate3d(0, -3px, 0) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: drop-shadow(0 0 10px var(--acc-soft, rgba(48,209,88,0.4)));
+  }
+}
+

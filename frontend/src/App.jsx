@@ -8,6 +8,7 @@ import { setLang, useLang } from './lib/i18n.js'
 import { setNav } from './lib/nav.js'
 import { useWakeLock } from './lib/wakelock.js'
 import { startFlow } from './sheets.jsx'
+import SplashScreen from './components/SplashScreen.jsx'
 import Icon from './components/Icon.jsx'
 import TabBar from './components/TabBar.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -52,11 +53,7 @@ function Shell() {
 
   const authed = user || isGuest
   if (!ready && !authed) return (
-    <div id="app">
-      <div style={{ paddingTop: '44vh', display: 'flex', justifyContent: 'center', fontSize: 34, color: 'var(--label-3)' }}>
-        <Icon name="dumbbell" />
-      </div>
-    </div>
+    <div id="app" style={{ background: 'var(--bg, #000000)' }} />
   )
 
   return (
@@ -92,5 +89,10 @@ function Shell() {
 export default function App() {
   const boot = useStore(s => s.boot)
   useEffect(() => { boot() }, [boot])
-  return <HashRouter><Shell /></HashRouter>
+  return (
+    <HashRouter>
+      <SplashScreen />
+      <Shell />
+    </HashRouter>
+  )
 }
