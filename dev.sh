@@ -8,9 +8,11 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_PORT=${API_PORT:-3000}
 FRONTEND_PORT=${FRONTEND_PORT:-5173}
 
-# Load .env file
+# Load .env file (properly handles quoted values with spaces)
 if [ -f "$PROJECT_DIR/.env" ]; then
-  export $(cat "$PROJECT_DIR/.env" | grep -v '^#' | xargs)
+  set -a
+  source "$PROJECT_DIR/.env"
+  set +a
 fi
 
 # Set defaults if not in .env
