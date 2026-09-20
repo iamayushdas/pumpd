@@ -41,7 +41,12 @@ let collections = {
 };
 
 async function connectMongo() {
-  client = new MongoClient(MONGO_URI);
+  client = new MongoClient(MONGO_URI, {
+    retryWrites: true,
+    w: 'majority',
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
+  });
   await client.connect();
   db = client.db(MONGO_DB);
   
@@ -65,7 +70,7 @@ async function connectMongo() {
   await collections.exercises.createIndex({ id: 1 });
   await collections.media.createIndex({ filename: 1 });
   
-  console.log(`✓ MongoDB connected: ${MONGO_URI}/${MONGO_DB}`);
+  console.log(`✓ MongoDB connected: ${MONGO_DB}`);
 }
 
 /* ---------- secret + session key ---------- */
@@ -143,38 +148,43 @@ function userNow(tz) {
   } catch { return null; }
 }
 
-setInterval(async () => {
-  try {
-    const users = await collections.users.find({}).toArray();
-    for (const user of users) {
-      const hasSubs = await collections.subscriptions.findOne({ userId: user.id });
-      if (!hasSubs) continue;
+// Start reminder loop only after MongoDB is connected
+function startReminderLoop() {
+  setInterval(async () => {
+    try {
+      if (!collections.users) return; // Skip if not connected
       
-      const state = await collections.userStates.findOne({ userId: user.id });
-      if (!state?.reminder?.on) continue;
-      
-      const now = userNow(state.reminder.tz || 'UTC');
-      if (!now || state.reminder.time !== now.hhmm) continue;
-      if (user.lastReminder === now.date) continue;
-      if ((state.workouts || []).some(w => w.d === now.date)) continue;
-      
-      const rid = effectiveRoutineId(state, now.date);
-      if (!rid) continue;
-      
-      const routine = (state.routines || []).find(r => r.id === rid);
-      console.log('reminder firing', user.id, rid);
-      
-      await collections.users.updateOne({ id: user.id }, { $set: { lastReminder: now.date } });
-      sendPush(user.id, {
-        title: routine ? `${routine.emoji || '🏋️'} ${routine.name} today` : 'Workout planned today',
-        body: "It's on your plan — let's go 💪",
-        tag: 'day-reminder'
-      });
+      const users = await collections.users.find({}).toArray();
+      for (const user of users) {
+        const hasSubs = await collections.subscriptions.findOne({ userId: user.id });
+        if (!hasSubs) continue;
+        
+        const state = await collections.userStates.findOne({ userId: user.id });
+        if (!state?.reminder?.on) continue;
+        
+        const now = userNow(state.reminder.tz || 'UTC');
+        if (!now || state.reminder.time !== now.hhmm) continue;
+        if (user.lastReminder === now.date) continue;
+        if ((state.workouts || []).some(w => w.d === now.date)) continue;
+        
+        const rid = effectiveRoutineId(state, now.date);
+        if (!rid) continue;
+        
+        const routine = (state.routines || []).find(r => r.id === rid);
+        console.log('reminder firing', user.id, rid);
+        
+        await collections.users.updateOne({ id: user.id }, { $set: { lastReminder: now.date } });
+        sendPush(user.id, {
+          title: routine ? `${routine.emoji || '🏋️'} ${routine.name} today` : 'Workout planned today',
+          body: "It's on your plan — let's go 💪",
+          tag: 'day-reminder'
+        });
+      }
+    } catch (e) {
+      console.error('reminder loop error:', e.message);
     }
-  } catch (e) {
-    console.error('reminder loop error:', e.message);
-  }
-}, 10000).unref();
+  }, 10000).unref();
+}
 
 /* ---------- sessions (signed cookie) ---------- */
 function sign(payload) {
@@ -632,6 +642,9 @@ const routes = {
 async function main() {
   try {
     await connectMongo();
+    
+    // Start reminder loop after MongoDB is connected
+    startReminderLoop();
     
     http.createServer(async (req, res) => {
       const url = new URL(req.url, 'http://x');
