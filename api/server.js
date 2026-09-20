@@ -11,7 +11,7 @@ import {
   generateAuthenticationOptions, verifyAuthenticationResponse
 } from '@simplewebauthn/server';
 import webpush from 'web-push';
-import nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 
 const PORT = +(process.env.PORT || 3000);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017';
@@ -26,15 +26,18 @@ const SESSION_DAYS = Math.max(1, +(process.env.SESSION_DAYS || 90) || 90);
 const MAX_BODY = 5 * 1024 * 1024;
 const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
 
-// Email configuration (supports SendGrid, Gmail SMTP, or any SMTP provider)
-// Strip surrounding quotes and whitespace — hosting dashboards (Render, Railway, etc.)
-// may store env var values with literal quote characters, unlike shell .env files.
+// Email configuration using SendGrid HTTP API (not blocked by Render)
 const stripQuotes = s => s.trim().replace(/^["']|["']$/g, '');
-const SMTP_HOST = stripQuotes(process.env.SMTP_HOST || process.env.SMTP_RELAY_HOST || 'smtp.sendgrid.net');
-const SMTP_PORT = +(process.env.SMTP_PORT || process.env.SMTP_RELAY_PORT || 587);
-const SMTP_USER = stripQuotes(process.env.SMTP_USER || process.env.SMTP_RELAY_USER || 'apikey');
-const SMTP_PASS = stripQuotes(process.env.SMTP_PASS || process.env.SMTP_RELAY_PASS || process.env.SENDGRID_API_KEY || '');
-const SMTP_FROM = stripQuotes(process.env.SMTP_FROM || process.env.SENDER || 'pumpd <noreply@localhost>');
+const SENDGRID_API_KEY = stripQuotes(process.env.SENDGRID_API_KEY || process.env.SMTP_PASS || '');
+const EMAIL_FROM = stripQuotes(process.env.SMTP_FROM || process.env.SENDER || 'pumpd <noreply@localhost>');
+
+// Initialize SendGrid if API key is present
+if (SENDGRID_API_KEY) {
+  sgMail.setApiKey(SENDGRID_API_KEY);
+  console.log('[Email] SendGrid API key configured');
+} else {
+  console.log('[Email] SendGrid API key not set - emails will not be sent');
+}
 
 // Ensure data directory exists for secrets and VAPID keys
 fs.mkdirSync(DATA, { recursive: true });
@@ -143,88 +146,32 @@ function scheduleRestTimer(userId, sec) {
 }
 
 /* ---------- email sending ---------- */
-let mailTransporter = null;
-
-function initMailTransporter() {
-  console.log('[Email] Config - SMTP_HOST:', SMTP_HOST ? 'set' : 'NOT SET');
-  console.log('[Email] Config - SMTP_USER:', SMTP_USER ? 'set' : 'NOT SET');
-  console.log('[Email] Config - SMTP_PASS:', SMTP_PASS ? 'set' : 'NOT SET');
-  console.log('[Email] Config - SMTP_FROM:', SMTP_FROM);
-  console.log('[Email] Config - SMTP_PORT:', SMTP_PORT);
-  
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    console.log('[Email] SMTP not configured - emails will not be sent');
-    return null;
-  }
-  
-  try {
-    console.log('[Email] Creating SMTP transport with host:', SMTP_HOST, 'port:', SMTP_PORT);
-    mailTransporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      requireTLS: SMTP_PORT === 587,
-      ignoreTLS: false,
-      tls: {
-        rejectUnauthorized: false,
-        servername: SMTP_HOST
-      },
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS.replace(/\s+/g, '')
-      },
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 30000
-    });
-    console.log('[Email] SMTP transporter initialized');
-
-    // Verify the connection asynchronously (don't block startup)
-    mailTransporter.verify()
-      .then(() => console.log('[Email] SMTP connection verified successfully'))
-      .catch(err => console.error('[Email] SMTP connection verification failed:', err.message));
-
-    return mailTransporter;
-  } catch (e) {
-    console.error('[Email] Failed to initialize SMTP:', e.message, e.stack);
-    return null;
-  }
-}
-
 async function sendEmail(to, subject, text, html) {
   console.log('[Email] sendEmail called with:', { to, subject });
   
-  if (!mailTransporter) {
-    mailTransporter = initMailTransporter();
-    if (!mailTransporter) {
-      console.log('[Email] Skipping email to', to, '- SMTP not configured');
-      return { skipped: true };
-    }
+  if (!SENDGRID_API_KEY) {
+    console.log('[Email] Skipping email to', to, '- SendGrid API key not configured');
+    return { skipped: true };
   }
   
   try {
-    console.log('[Email] Sending email to', to);
-    const info = await mailTransporter.sendMail({
-      from: SMTP_FROM,
+    console.log('[Email] Sending email via SendGrid HTTP API to', to);
+    const msg = {
       to,
+      from: EMAIL_FROM,
       subject,
       text,
-      html,
-      timeout: 15000
-    });
-    console.log('[Email] Sent to', to, '- Message ID:', info.messageId);
-    console.log('[Email] Accepted:', info.accepted);
-    return { success: true, messageId: info.messageId };
+      html
+    };
+    
+    const response = await sgMail.send(msg);
+    console.log('[Email] Sent to', to, '- Status:', response[0].statusCode);
+    return { success: true, messageId: response[0].headers['x-message-id'] };
   } catch (e) {
     console.error('[Email] Failed to send to', to, ':', e.message);
     console.error('[Email] Error code:', e.code || 'no code');
-    console.error('[Email] Error response:', e.response || 'no response');
-    console.error('[Email] Error command:', e.command || 'no command');
-    // Reset transporter on connection errors so next attempt creates a fresh one
-    if (['ECONNECTION', 'ECONNREFUSED', 'ETIMEDOUT', 'ESOCKET', 'ECONNRESET'].includes(e.code)) {
-      mailTransporter = null;
-    }
-    return { error: e.message, code: e.code || 'unknown', response: e.response || 'no response' };
+    console.error('[Email] Error response:', e.response?.body || 'no response');
+    return { error: e.message, code: e.code || 'unknown', response: e.response?.body || 'no response' };
   }
 }
 
