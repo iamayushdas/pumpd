@@ -1,5 +1,5 @@
 # Build stage for frontend
-FROM node:22-alpine AS frontend-build
+FROM node:22-slim AS frontend-build
 
 WORKDIR /app/frontend
 
@@ -16,9 +16,12 @@ COPY frontend/ ./
 RUN npm run build
 
 # Production stage
-FROM node:22-alpine
+FROM node:22-slim
 
 WORKDIR /app
+
+# Install CA certificates for secure TLS connections
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Install API dependencies
 COPY api/package*.json ./api/

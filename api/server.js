@@ -42,6 +42,8 @@ let collections = {
 };
 
 async function connectMongo() {
+  const maskedUri = MONGO_URI.replace(/:([^:@]+)@/, ':****@');
+  console.log(`Connecting to MongoDB: ${maskedUri}`);
   client = new MongoClient(MONGO_URI, {
     retryWrites: true,
     w: 'majority',
