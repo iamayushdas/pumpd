@@ -38,7 +38,8 @@ let collections = {
   invites: null,
   userStates: null,
   exercises: null,
-  media: null
+  media: null,
+  accessRequests: null
 };
 
 async function connectMongo() {
@@ -61,6 +62,7 @@ async function connectMongo() {
   collections.userStates = db.collection('userStates');
   collections.exercises = db.collection('exercises');
   collections.media = db.collection('exercise_media');
+  collections.accessRequests = db.collection('accessRequests');
   
   // Create indexes
   await collections.users.createIndex({ id: 1 }, { unique: true });
@@ -72,6 +74,8 @@ async function connectMongo() {
   await collections.userStates.createIndex({ userId: 1 }, { unique: true });
   await collections.exercises.createIndex({ id: 1 });
   await collections.media.createIndex({ filename: 1 });
+  await collections.accessRequests.createIndex({ email: 1 });
+  await collections.accessRequests.createIndex({ status: 1 });
   
   console.log(`✓ MongoDB connected: ${MONGO_DB}`);
 }
@@ -687,6 +691,91 @@ const routes = {
     if (inv.usedBy) return json(res, 400, { error: 'already used — cannot revoke' });
     
     await collections.invites.deleteOne({ code: inv.code });
+    json(res, 200, { ok: true });
+  },
+
+  /* ---------- access requests ---------- */
+  'POST /api/access-request': async (req, res) => {
+    const body = await readBody(req);
+    const email = String(body.email || '').trim().toLowerCase().slice(0, 100);
+    const name = String(body.name || '').trim().slice(0, 40);
+    
+    if (!email || !name) return json(res, 400, { error: 'email and name are required' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 400, { error: 'invalid email' });
+    
+    // Check if already requested
+    const existing = await collections.accessRequests.findOne({ email, status: 'pending' });
+    if (existing) return json(res, 200, { message: 'your request has already been submitted' });
+    
+    const request = {
+      email,
+      name,
+      status: 'pending',
+      created: new Date().toISOString(),
+      message: String(body.message || '').slice(0, 500)
+    };
+    
+    await collections.accessRequests.insertOne(request);
+    json(res, 200, { message: 'access request submitted successfully' });
+  },
+
+  'GET /api/admin/access-requests': async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const requests = await collections.accessRequests.find({}).sort({ created: -1 }).toArray();
+    json(res, 200, { requests });
+  },
+
+  'POST /api/admin/access-request/approve': async (req, res) => {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+    const body = await readBody(req);
+    const requestId = body.id;
+    
+    if (!requestId) return json(res, 400, { error: 'request id required' });
+    
+    const request = await collections.accessRequests.findOne({ _id: new ObjectId(requestId) });
+    if (!request) return json(res, 404, { error: 'request not found' });
+    if (request.status !== 'pending') return json(res, 400, { error: 'request already processed' });
+    
+    // Generate invite code
+    let code;
+    do { code = crypto.randomBytes(8).toString('hex').toUpperCase(); }
+    while (await collections.invites.findOne({ code }));
+    
+    const invite = {
+      code,
+      note: `For ${request.name} (${request.email})`,
+      createdBy: admin.id,
+      created: new Date().toISOString(),
+      forEmail: request.email
+    };
+    
+    await collections.invites.insertOne(invite);
+    await collections.accessRequests.updateOne(
+      { _id: new ObjectId(requestId) },
+      { $set: { status: 'approved', approvedBy: admin.id, approvedAt: new Date().toISOString(), inviteCode: code } }
+    );
+    
+    json(res, 200, { ok: true, code });
+  },
+
+  'POST /api/admin/access-request/reject': async (req, res) => {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+    const body = await readBody(req);
+    const requestId = body.id;
+    
+    if (!requestId) return json(res, 400, { error: 'request id required' });
+    
+    const request = await collections.accessRequests.findOne({ _id: new ObjectId(requestId) });
+    if (!request) return json(res, 404, { error: 'request not found' });
+    if (request.status !== 'pending') return json(res, 400, { error: 'request already processed' });
+    
+    await collections.accessRequests.updateOne(
+      { _id: new ObjectId(requestId) },
+      { $set: { status: 'rejected', rejectedBy: admin.id, rejectedAt: new Date().toISOString() } }
+    );
+    
     json(res, 200, { ok: true });
   }
 };

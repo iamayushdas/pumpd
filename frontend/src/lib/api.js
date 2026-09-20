@@ -66,3 +66,28 @@ export async function adminLogin(secretOrUser, password) {
   })
   return res.user
 }
+
+export async function requestAccess(email, name, message) {
+  return api('/api/access-request', {
+    method: 'POST',
+    body: JSON.stringify({ email, name, message })
+  })
+}
+
+export async function getAccessRequests() {
+  return api('/api/admin/access-requests')
+}
+
+export async function approveAccessRequest(id) {
+  return api('/api/admin/access-request/approve', {
+    method: 'POST',
+    body: JSON.stringify({ id })
+  })
+}
+
+export async function rejectAccessRequest(id) {
+  return api('/api/admin/access-request/reject', {
+    method: 'POST',
+    body: JSON.stringify({ id })
+  })
+}

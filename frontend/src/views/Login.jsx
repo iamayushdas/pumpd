@@ -1,6 +1,6 @@
 import { useStore, hasData } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { webauthnOK, passkeyLogin, passkeyRegister, adminLogin, api, BIO, VAULT } from '../lib/api.js'
+import { webauthnOK, passkeyLogin, passkeyRegister, adminLogin, requestAccess, api, BIO, VAULT } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
 import { DEMO, REPO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
@@ -31,9 +31,12 @@ function PasskeyInfoSheet({ close }) {
 
 export default function Login() {
   const { setUser, pushState, pullState, setGuest } = useStore()
-  const [tab, setTab] = useState('login') // 'login' | 'register'
+  const [tab, setTab] = useState('login') // 'login' | 'register' | 'request'
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [email, setEmail] = useState('')
+  const [message, setMessage] = useState('')
+  const [requestSubmitted, setRequestSubmitted] = useState(false)
   const [inviteOnly, setInviteOnly] = useState(false)
   const [loading, setLoading] = useState(false)
   const [serverOk, setServerOk] = useState(true)
@@ -125,6 +128,29 @@ export default function Login() {
     }
   }
 
+  const handleRequestAccess = async (e) => {
+    e?.preventDefault()
+    if (loading) return
+    const n = name.trim()
+    const em = email.trim()
+    
+    if (!n || !em) {
+      useUI.getState().toast(t('Name and email are required'))
+      return
+    }
+
+    setLoading(true)
+    try {
+      await requestAccess(em, n, message.trim())
+      setRequestSubmitted(true)
+      useUI.getState().toast(t('Access request submitted'))
+    } catch (e) {
+      useUI.getState().toast(e.message || t('Request failed'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Demo build: no backend to sign in against
   if (DEMO) {
     return (
@@ -204,8 +230,18 @@ export default function Login() {
               onClick={() => setTab('register')}
             >
               <Icon name="sparkles" />
-              <span>{t('New Profile')}</span>
+              <span>{inviteOnly ? t('Have Code') : t('New Profile')}</span>
             </button>
+            {inviteOnly && (
+              <button
+                type="button"
+                className={`login-tab-btn ${tab === 'request' ? 'active' : ''}`}
+                onClick={() => setTab('request')}
+              >
+                <Icon name="mail" />
+                <span>{t('Request Access')}</span>
+              </button>
+            )}
           </div>
 
           {supportsPasskeys ? (
@@ -240,7 +276,7 @@ export default function Login() {
                   {t('Continue as Guest')}
                 </Button>
               </div>
-            ) : (
+            ) : tab === 'register' ? (
               /* Create Profile Tab */
               <form onSubmit={handleRegister}>
                 <div style={{ marginBottom: 12 }}>
@@ -290,6 +326,91 @@ export default function Login() {
                     t('Create Profile')
                   )}
                 </Button>
+              </form>
+            ) : (
+              /* Request Access Tab */
+              <form onSubmit={handleRequestAccess}>
+                {requestSubmitted ? (
+                  <div>
+                    <div className="card small" style={{ textAlign: 'center', marginBottom: 16, padding: 20 }}>
+                      <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
+                      <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>{t('Request Submitted')}</p>
+                      <p className="dim" style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+                        {t('You will receive an invite code at {0} once approved.', email)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      onClick={() => { setRequestSubmitted(false); setTab('login'); }}
+                      style={{ width: '100%', height: 40, fontSize: 14.5 }}
+                    >
+                      {t('Back to Sign In')}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
+                        {t('NAME')}
+                      </label>
+                      <input
+                        className="input field"
+                        placeholder={t('Your name')}
+                        maxLength={40}
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15 }}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
+                        {t('EMAIL')}
+                      </label>
+                      <input
+                        type="email"
+                        className="input field"
+                        placeholder={t('you@example.com')}
+                        maxLength={100}
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15 }}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
+                        {t('MESSAGE (OPTIONAL)')}
+                      </label>
+                      <textarea
+                        className="input field"
+                        placeholder={t('Why would you like to join?')}
+                        maxLength={500}
+                        value={message}
+                        onChange={e => setMessage(e.target.value)}
+                        rows={3}
+                        style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15, resize: 'vertical' }}
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      icon={loading ? undefined : 'mail'}
+                      disabled={loading}
+                      style={{ width: '100%', height: 48, fontSize: 16, fontWeight: 600, marginTop: 4 }}
+                    >
+                      {loading ? (
+                        <span className="row" style={{ gap: 8, justifyContent: 'center' }}>
+                          <span className="login-spinner" />
+                          {t('Submitting...')}
+                        </span>
+                      ) : (
+                        t('Request Access')
+                      )}
+                    </Button>
+                  </>
+                )}
               </form>
             )
           ) : (

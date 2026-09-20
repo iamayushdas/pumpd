@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { api } from '../lib/api.js'
+import { api, getAccessRequests, approveAccessRequest, rejectAccessRequest } from '../lib/api.js'
 import { fmtDate, fmtNum, fmtVol, fmtDur } from '../lib/format.js'
 import { workoutVolume, setsDone } from '../lib/history.js'
 import { confirmSheet } from '../sheets.jsx'
@@ -63,6 +63,74 @@ function UserDetail({ id, onChanged, close }) {
   </>
 }
 
+function AccessRequestsCard({ requests, reload }) {
+  const toast = useUI(s => s.toast)
+  const openSheet = useUI(s => s.openSheet)
+  
+  const handleApprove = (req) => {
+    confirmSheet({
+      title: 'Approve ' + req.name + '?',
+      message: 'An invite code will be generated for ' + req.email,
+      confirmText: 'Approve',
+      onConfirm: () => {
+        approveAccessRequest(req._id)
+          .then(({ code }) => {
+            navigator.clipboard?.writeText(code).catch(() => {})
+            toast('Approved! Code ' + code + ' copied')
+            reload()
+          })
+          .catch(e => toast(e.message))
+      }
+    })
+  }
+  
+  const handleReject = (req) => {
+    confirmSheet({
+      title: 'Reject ' + req.name + '?',
+      message: 'This will mark their request as rejected.',
+      confirmText: 'Reject',
+      danger: true,
+      onConfirm: () => {
+        rejectAccessRequest(req._id)
+          .then(() => { toast('Request rejected'); reload() })
+          .catch(e => toast(e.message))
+      }
+    })
+  }
+  
+  const pending = (requests || []).filter(r => r.status === 'pending')
+  const processed = (requests || []).filter(r => r.status !== 'pending')
+  
+  return <div className="card">
+    <h2 style={{ margin: '0 0 8px' }}>Access Requests</h2>
+    <div className="small muted" style={{ marginBottom: 10 }}>{pending.length} pending · {processed.length} processed</div>
+    
+    {pending.map(r => <div key={r._id} className="card small" style={{ marginBottom: 8, padding: 12 }}>
+      <div className="row between" style={{ marginBottom: 8 }}>
+        <div><div style={{ fontWeight: 600 }}>{r.name}</div>
+          <div className="dim small">{r.email}</div></div>
+        <span className="tag">pending</span>
+      </div>
+      {r.message && <div className="dim small" style={{ marginBottom: 8, lineHeight: 1.4 }}>{r.message}</div>}
+      <div className="small dim" style={{ marginBottom: 8 }}>Requested {rel(new Date(r.created).getTime())}</div>
+      <div className="row" style={{ gap: 8 }}>
+        <Button variant="primary" size="sm" onClick={() => handleApprove(r)} style={{ flex: 1 }}>Approve</Button>
+        <Button variant="danger" size="sm" onClick={() => handleReject(r)} style={{ flex: 1 }}>Reject</Button>
+      </div>
+    </div>)}
+    
+    {pending.length === 0 && <div className="dim small" style={{ marginBottom: 10 }}>No pending requests</div>}
+    
+    {processed.length > 0 && <details style={{ marginTop: 12 }}>
+      <summary className="small" style={{ cursor: 'pointer', marginBottom: 8 }}>Processed ({processed.length})</summary>
+      {processed.map(r => <div key={r._id} className="row between dim" style={{ padding: '7px 2px', fontSize: '.8rem', borderBottom: '1px solid var(--sep)' }}>
+        <div><div>{r.name}</div><div style={{ fontSize: '.7rem' }}>{r.email}</div></div>
+        <span className="tag" style={{ color: r.status === 'approved' ? 'var(--green)' : 'var(--red)' }}>{r.status}</span>
+      </div>)}
+    </details>}
+  </div>
+}
+
 function InvitesCard({ invites, reload }) {
   const toast = useUI(s => s.toast)
   const gen = () => api('/api/admin/invites/new', { method: 'POST', body: '{}' })
@@ -95,32 +163,35 @@ export default function Admin() {
   const openSheet = useUI(s => s.openSheet)
   const [users, setUsers] = useState(null)
   const [invites, setInvites] = useState(null)
+  const [accessRequests, setAccessRequests] = useState(null)
   const [inviteOnly, setInviteOnly] = useState(false)
 
   const loadUsers = () => api('/api/admin/users').then(d => { setUsers(d.users); setInviteOnly(d.invite_only) }).catch(e => toast(e.message || 'Failed to load'))
   const loadInvites = () => api('/api/admin/invites').then(d => setInvites(d.invites)).catch(() => {})
+  const loadAccessRequests = () => getAccessRequests().then(d => setAccessRequests(d.requests)).catch(() => {})
   // poll every 15s so the "training now" section stays live without a manual refresh
-  useEffect(() => { if (!user?.admin) return; loadUsers(); loadInvites(); const iv = setInterval(loadUsers, 15000); return () => clearInterval(iv) }, [])
+  useEffect(() => { if (!user?.admin) return; loadUsers(); loadInvites(); loadAccessRequests(); const iv = setInterval(() => { loadUsers(); loadAccessRequests() }, 15000); return () => clearInterval(iv) }, [])
   if (!user?.admin) return null
 
   const openUser = id => openSheet(close => <UserDetail id={id} onChanged={loadUsers} close={close} />)
   const liveUsers = (users || []).filter(u => u.live)
   const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
   const disabledCount = (users || []).filter(u => u.disabled).length
+  const pendingRequests = (accessRequests || []).filter(r => r.status === 'pending').length
 
   return <div className="narrow">
     <div className="hdr">
       <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Back"><Icon name="chevronLeft" /></button>
       <div style={{ flex: 1, marginLeft: 8 }}><h1 style={{ margin: 0 }}>Admin</h1>
         <div className="sub">{users ? users.length + ' users · ' + activeCount + ' active this week' : 'Loading…'}</div></div>
-      <button className="iconbtn" onClick={() => { loadUsers(); loadInvites() }} aria-label="refresh">↻</button>
+      <button className="iconbtn" onClick={() => { loadUsers(); loadInvites(); loadAccessRequests() }} aria-label="refresh">↻</button>
     </div>
 
     <div className="tiles" style={{ marginBottom: 12 }}>
       <div className="tile"><div className="l">Users</div><div className="v">{users ? users.length : '—'}</div></div>
       <div className="tile"><div className="l">Training now</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? liveUsers.length : '—'}</div></div>
       <div className="tile"><div className="l">Active 7d</div><div className="v">{users ? activeCount : '—'}</div></div>
-      <div className="tile"><div className="l">Disabled</div><div className="v">{users ? disabledCount : '—'}</div></div>
+      <div className="tile"><div className="l">Pending</div><div className="v" style={{ color: pendingRequests ? 'var(--orange)' : undefined }}>{accessRequests ? pendingRequests : '—'}</div></div>
     </div>
 
     {liveUsers.length > 0 && <div className="card" style={{ borderColor: 'var(--acc)' }}>
@@ -131,6 +202,8 @@ export default function Admin() {
         <span className="tag acc">{dur(Date.now() - u.live.startedAt)}</span>
       </div>)}
     </div>}
+
+    {inviteOnly && <AccessRequestsCard requests={accessRequests} reload={loadAccessRequests} />}
 
     <InvitesCard invites={invites} reload={loadInvites} />
 
