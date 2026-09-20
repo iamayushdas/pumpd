@@ -14,7 +14,7 @@ services:
       - key: RP_ID
         sync: false
       - key: ORIGIN
-        sync: false
+        value: https://pumpd.onrender.com
       - key: RP_NAME
         value: pumpd
       - key: SESSION_DAYS
@@ -28,4 +28,15 @@ services:
       - key: INVITE_ONLY
         value: "true"
       - key: VAPID_SUBJECT
+        sync: false
+      # Email configuration for sending invite codes
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
         sync: false
