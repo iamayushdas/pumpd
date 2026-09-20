@@ -302,7 +302,13 @@ const routes = {
     json(res, 200, { ok: true, users: count });
   },
 
-  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY }),
+  'GET /api/config': async (req, res) => {
+    const userCount = await collections.users.countDocuments();
+    json(res, 200, {
+      invite_only: INVITE_ONLY && userCount > 0,
+      user_count: userCount
+    });
+  },
 
   // Exercise JSON dataset from MongoDB
   'GET /api/exercises': async (req, res) => {
@@ -327,7 +333,8 @@ const routes = {
     if (!name) return json(res, 400, { error: 'name required' });
     const code = String(body.code || '').trim().toUpperCase();
     
-    if (INVITE_ONLY) {
+    const userCount = await collections.users.countDocuments();
+    if (INVITE_ONLY && userCount > 0) {
       const validInvite = await collections.invites.findOne({ code, usedBy: null, revoked: { $ne: true } });
       if (!validInvite) return json(res, 403, { error: 'a valid invite code is required' });
     }
@@ -366,13 +373,19 @@ const routes = {
     const existingCred = await collections.credentials.findOne({ id: credential.id });
     if (existingCred) return json(res, 409, { error: 'credential already registered' });
     
+    const userCount = await collections.users.countDocuments();
     let invite = null;
-    if (INVITE_ONLY) {
+    if (INVITE_ONLY && userCount > 0) {
       invite = await collections.invites.findOne({ code: c.code, usedBy: null, revoked: { $ne: true } });
       if (!invite) return json(res, 403, { error: 'invite code is no longer valid — ask for a new one' });
     }
     
-    const user = { id: c.uid, name: c.name, created: new Date().toISOString() };
+    const user = {
+      id: c.uid,
+      name: c.name,
+      created: new Date().toISOString(),
+      admin: userCount === 0 || ADMIN_UIDS.includes(c.uid)
+    };
     if (invite) {
       user.invitedBy = invite.code;
       await collections.invites.updateOne({ code: c.code }, { $set: { usedBy: user.id, usedAt: user.created } });

@@ -22,6 +22,6 @@ services:
       - key: ADMIN_UIDS
         value: ""
       - key: INVITE_ONLY
-        value: "false"
+        value: "true"
       - key: VAPID_SUBJECT
         sync: false
