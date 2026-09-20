@@ -131,7 +131,7 @@ export default function Login() {
               {t('Start the demo')}
             </Button>
             <p className="dim small" style={{ marginTop: 14, lineHeight: 1.5, fontSize: 13.5 }}>
-              {t('This demo runs entirely in your browser on example data — nothing is sent anywhere. Passkey sign-in and sync across your devices come with the openGym server, which you get by self-hosting it.')}
+              {t('This demo runs entirely in your browser on example data — nothing is sent anywhere. Passkey sign-in and sync across your devices come with the pumpd server, which you get by self-hosting it.')}
             </p>
           </div>
 
