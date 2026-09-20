@@ -143,6 +143,12 @@ function scheduleRestTimer(userId, sec) {
 let mailTransporter = null;
 
 function initMailTransporter() {
+  console.log('[Email] Config - SMTP_HOST:', SMTP_HOST ? 'set' : 'NOT SET');
+  console.log('[Email] Config - SMTP_USER:', SMTP_USER ? 'set' : 'NOT SET');
+  console.log('[Email] Config - SMTP_PASS:', SMTP_PASS ? 'set' : 'NOT SET');
+  console.log('[Email] Config - SMTP_FROM:', SMTP_FROM);
+  console.log('[Email] Config - SMTP_PORT:', SMTP_PORT);
+  
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
     console.log('[Email] SMTP not configured - emails will not be sent');
     return null;
@@ -161,12 +167,14 @@ function initMailTransporter() {
     console.log('[Email] SMTP transporter initialized');
     return mailTransporter;
   } catch (e) {
-    console.error('[Email] Failed to initialize SMTP:', e.message);
+    console.error('[Email] Failed to initialize SMTP:', e.message, e.stack);
     return null;
   }
 }
 
 async function sendEmail(to, subject, text, html) {
+  console.log('[Email] sendEmail called with:', { to, subject });
+  
   if (!mailTransporter) {
     mailTransporter = initMailTransporter();
     if (!mailTransporter) {
@@ -176,6 +184,7 @@ async function sendEmail(to, subject, text, html) {
   }
   
   try {
+    console.log('[Email] Sending email...');
     const info = await mailTransporter.sendMail({
       from: SMTP_FROM,
       to,
@@ -184,10 +193,12 @@ async function sendEmail(to, subject, text, html) {
       html
     });
     console.log('[Email] Sent to', to, '- Message ID:', info.messageId);
+    console.log('[Email] Accepted:', info.accepted);
     return { success: true, messageId: info.messageId };
   } catch (e) {
     console.error('[Email] Failed to send to', to, ':', e.message);
-    return { error: e.message };
+    console.error('[Email] Error details:', e.code || 'no code', '- response:', e.response || 'no response');
+    return { error: e.message, details: e.code || 'unknown', response: e.response || 'no response' };
   }
 }
 
@@ -837,9 +848,11 @@ const routes = {
     );
     
     // Send invite code via email
+    console.log('[Access Request] Approving request for:', request.email, '- Code:', code);
     const emailResult = await sendInviteCodeEmail(request.email, request.name, code);
+    console.log('[Access Request] Email result:', JSON.stringify(emailResult));
     
-    json(res, 200, { ok: true, code, emailSent: emailResult.success || false });
+    json(res, 200, { ok: true, code, emailSent: emailResult.success || false, emailError: emailResult.error || null });
   },
 
   'POST /api/admin/access-request/reject': async (req, res) => {
