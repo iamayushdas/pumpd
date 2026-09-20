@@ -219,7 +219,11 @@ async function sendAccessRequestNotification(requesterEmail, requesterName, mess
 
 async function sendInviteCodeEmail(email, name, code) {
   const subject = `Your ${RP_NAME} Invite Code - Let's Get Started!`;
-  const text = `Hi ${name},\n\nGreat news! Your access request has been approved.\n\nYour invite code is: ${code}\n\nHow to get started:\n1. Visit ${ORIGIN}\n2. Click "New Profile" tab\n3. Enter your name\n4. Enter your invite code: ${code}\n5. Set up your passkey (fingerprint, face ID, or security key)\n6. Start tracking your workouts!\n\nWelcome to ${RP_NAME}!`;
+  
+  // Create a direct login URL with encoded parameters
+  const directLoginUrl = `${ORIGIN}?invite=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`;
+  
+  const text = `Hi ${name},\n\nGreat news! Your access request has been approved.\n\nYour invite code is: ${code}\n\nQuick start:\nClick here to get started: ${directLoginUrl}\n\nOr enter manually:\n1. Visit ${ORIGIN}\n2. Click "New Profile" tab\n3. Enter your name\n4. Enter your invite code: ${code}\n5. Set up your passkey (fingerprint, face ID, or security key)\n6. Start tracking your workouts!\n\nWelcome to ${RP_NAME}!`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <h2 style="color: #30d158;">Welcome to ${RP_NAME}! 💪</h2>
@@ -231,7 +235,12 @@ async function sendInviteCodeEmail(email, name, code) {
         <p style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 2px; color: #000; user-select: all;">${code}</p>
       </div>
       
-      <h3 style="color: #333; font-size: 18px; margin: 30px 0 15px;">How to get started:</h3>
+      <div style="text-align: center; margin: 30px 0;">
+        <p style="margin: 0 0 12px; color: #333; font-size: 14px;">Or get started instantly with this link:</p>
+        <a href="${directLoginUrl}" style="display: inline-block; background: #30d158; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600;">Get Started →</a>
+      </div>
+      
+      <h3 style="color: #333; font-size: 18px; margin: 30px 0 15px;">Manual setup:</h3>
       <ol style="line-height: 1.8; color: #333;">
         <li>Visit <a href="${ORIGIN}" style="color: #30d158; font-weight: 600;">${ORIGIN}</a></li>
         <li>Click the <strong>"New Profile"</strong> tab</li>
@@ -240,8 +249,6 @@ async function sendInviteCodeEmail(email, name, code) {
         <li>Set up your <strong>passkey</strong> (fingerprint, face ID, or security key)</li>
         <li>Start tracking your workouts!</li>
       </ol>
-      
-      <p style="margin-top: 30px;"><a href="${ORIGIN}" style="display: inline-block; background: #30d158; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600;">Get Started →</a></p>
       
       <p style="color: #666; font-size: 14px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
         Questions? Reply to this email.<br>

@@ -40,7 +40,24 @@ export default function Login() {
   const [inviteOnly, setInviteOnly] = useState(false)
   const [loading, setLoading] = useState(false)
   const [serverOk, setServerOk] = useState(true)
+  const [isAutoFilled, setIsAutoFilled] = useState(false)
   const nameRef = useRef(null)
+
+  useEffect(() => {
+    // Check for invite link parameters in URL
+    const params = new URLSearchParams(window.location.search)
+    const inviteCode = params.get('invite')
+    const inviteName = params.get('name')
+    
+    if (inviteCode && inviteName) {
+      setCode(inviteCode)
+      setName(inviteName)
+      setTab('register')
+      setIsAutoFilled(true)
+      // Clean up URL to avoid showing raw parameters
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [])
 
   useEffect(() => {
     api('/api/config')
@@ -56,6 +73,37 @@ export default function Login() {
       setTimeout(() => nameRef.current?.focus(), 150)
     }
   }, [tab])
+
+  useEffect(() => {
+    // Auto-trigger registration when form is auto-filled from URL parameters
+    if (isAutoFilled && name && code && !loading) {
+      const triggerAutoRegister = async () => {
+        setLoading(true)
+        try {
+          const u = await passkeyRegister(name, code)
+          setUser(u)
+          if (hasData(useStore.getState().S)) {
+            await pushState()
+            useUI.getState().toast(t('Profile created — data from this device moved into it'))
+          } else {
+            await pullState()
+            useUI.getState().toast(t('Welcome, {0}', u.name))
+          }
+        } catch (e) {
+          if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') {
+            useUI.getState().toast(e.message || t('Registration failed'))
+          }
+        } finally {
+          setLoading(false)
+          setIsAutoFilled(false)
+        }
+      }
+      
+      // Give a small delay to ensure UI is fully mounted
+      const timer = setTimeout(triggerAutoRegister, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [isAutoFilled, name, code, loading])
 
   const handleSignIn = async () => {
     if (loading) return
