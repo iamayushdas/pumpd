@@ -26,12 +26,12 @@ const SESSION_DAYS = Math.max(1, +(process.env.SESSION_DAYS || 90) || 90);
 const MAX_BODY = 5 * 1024 * 1024;
 const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
 
-// Email configuration
-const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = +(process.env.SMTP_PORT || 587);
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
-const SMTP_FROM = process.env.SMTP_FROM || 'pumpd <noreply@localhost>';
+// Email configuration (supports SendGrid, Gmail SMTP, or any SMTP provider)
+const SMTP_HOST = process.env.SMTP_HOST || process.env.SMTP_RELAY_HOST || 'smtp.sendgrid.net';
+const SMTP_PORT = +(process.env.SMTP_PORT || process.env.SMTP_RELAY_PORT || 587);
+const SMTP_USER = process.env.SMTP_USER || process.env.SMTP_RELAY_USER || 'apikey';
+const SMTP_PASS = process.env.SMTP_PASS || process.env.SMTP_RELAY_PASS || process.env.SENDGRID_API_KEY || '';
+const SMTP_FROM = process.env.SMTP_FROM || process.env.SENDER || 'pumpd <noreply@localhost>';
 
 // Ensure data directory exists for secrets and VAPID keys
 fs.mkdirSync(DATA, { recursive: true });
