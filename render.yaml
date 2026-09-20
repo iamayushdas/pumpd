@@ -21,6 +21,10 @@ services:
         value: "90"
       - key: ADMIN_UIDS
         value: ""
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASS
+        sync: false
       - key: INVITE_ONLY
         value: "true"
       - key: VAPID_SUBJECT

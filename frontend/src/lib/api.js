@@ -57,3 +57,11 @@ export async function passkeyLogin() {
   const res = await api('/api/login/verify', { method: 'POST', body: JSON.stringify({ cid, credential: credToJSON(cred) }) })
   return res.user
 }
+
+export async function adminLogin(username, password) {
+  const res = await api('/api/admin/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password })
+  })
+  return res.user
+}

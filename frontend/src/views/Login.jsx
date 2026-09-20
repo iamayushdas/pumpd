@@ -1,6 +1,6 @@
 import { useStore, hasData } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO, VAULT } from '../lib/api.js'
+import { webauthnOK, passkeyLogin, passkeyRegister, adminLogin, api, BIO, VAULT } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
 import { DEMO, REPO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
@@ -31,9 +31,11 @@ function PasskeyInfoSheet({ close }) {
 
 export default function Login() {
   const { setUser, pushState, pullState, setGuest } = useStore()
-  const [tab, setTab] = useState('login') // 'login' | 'register'
+  const [tab, setTab] = useState('login') // 'login' | 'register' | 'admin'
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [adminUsername, setAdminUsername] = useState('admin')
+  const [adminPassword, setAdminPassword] = useState('')
   const [inviteOnly, setInviteOnly] = useState(false)
   const [loading, setLoading] = useState(false)
   const [serverOk, setServerOk] = useState(true)
@@ -66,6 +68,26 @@ export default function Login() {
       if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') {
         useUI.getState().toast(e.message || t('Sign-in failed'))
       }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAdminSignIn = async (e) => {
+    e?.preventDefault()
+    if (loading) return
+    if (!adminUsername.trim() || !adminPassword.trim()) {
+      useUI.getState().toast(t('Enter admin username and password'))
+      return
+    }
+    setLoading(true)
+    try {
+      const u = await adminLogin(adminUsername.trim(), adminPassword.trim())
+      setUser(u)
+      await pullState()
+      useUI.getState().toast(t('Welcome back, Admin'))
+    } catch (err) {
+      useUI.getState().toast(err.message || t('Invalid admin credentials'))
     } finally {
       setLoading(false)
     }
@@ -169,7 +191,7 @@ export default function Login() {
         {/* Main Card */}
         <div className="login-card">
           {/* Segmented Tab Switcher */}
-          <div className="login-tab-seg">
+          <div className="login-tab-seg" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
             <button
               type="button"
               className={`login-tab-btn ${tab === 'login' ? 'active' : ''}`}
@@ -186,9 +208,63 @@ export default function Login() {
               <Icon name="sparkles" />
               <span>{t('New Profile')}</span>
             </button>
+            <button
+              type="button"
+              className={`login-tab-btn ${tab === 'admin' ? 'active' : ''}`}
+              onClick={() => setTab('admin')}
+            >
+              <Icon name="shield" />
+              <span>{t('Admin')}</span>
+            </button>
           </div>
 
-          {supportsPasskeys ? (
+          {tab === 'admin' ? (
+            /* Admin Sign In Tab */
+            <form onSubmit={handleAdminSignIn}>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
+                  {t('ADMIN USERNAME')}
+                </label>
+                <input
+                  className="input field"
+                  placeholder="admin"
+                  autoCapitalize="none"
+                  value={adminUsername}
+                  onChange={e => setAdminUsername(e.target.value)}
+                  style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15 }}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
+                  {t('ADMIN PASSWORD')}
+                </label>
+                <input
+                  type="password"
+                  className="input field"
+                  placeholder="••••••••"
+                  value={adminPassword}
+                  onChange={e => setAdminPassword(e.target.value)}
+                  style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15 }}
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                icon={loading ? undefined : 'lock'}
+                disabled={loading}
+                style={{ width: '100%', height: 48, fontSize: 16, fontWeight: 600 }}
+              >
+                {loading ? (
+                  <span className="row" style={{ gap: 8, justifyContent: 'center' }}>
+                    <span className="login-spinner" />
+                    {t('Signing in...')}
+                  </span>
+                ) : (
+                  t('Sign In as Admin')
+                )}
+              </Button>
+            </form>
+          ) : supportsPasskeys ? (
             tab === 'login' ? (
               /* Sign In Tab */
               <div>

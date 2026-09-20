@@ -81,7 +81,7 @@ const secretFile = path.join(DATA, 'secret');
 if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
 const SECRET = fs.readFileSync(secretFile, 'utf8').trim();
 
-const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
+const isAdmin = user => !!user && (user.admin === true || user.id === 'admin' || ADMIN_UIDS.includes(user.id));
 
 /* ---------- push notifications (Web Push / VAPID) ---------- */
 const vapidFile = path.join(DATA, 'vapid.json');
@@ -550,6 +550,37 @@ const routes = {
       });
     } else presence.delete(user.id);
     json(res, 200, { ok: true });
+  },
+
+  'POST /api/admin/login': async (req, res) => {
+    const body = await readBody(req);
+    const username = String(body.username || '').trim();
+    const password = String(body.password || '').trim();
+
+    const validUser = process.env.ADMIN_USER || process.env.ADMIN_USERNAME || 'admin';
+    const validPass = process.env.ADMIN_PASS || process.env.ADMIN_PASSWORD || 'admin';
+
+    if (!username || !password || username !== validUser || password !== validPass) {
+      return json(res, 401, { error: 'Invalid admin username or password' });
+    }
+
+    let adminUser = await collections.users.findOne({ id: 'admin' });
+    if (!adminUser) {
+      adminUser = {
+        id: 'admin',
+        name: 'Admin',
+        created: new Date().toISOString(),
+        admin: true
+      };
+      await collections.users.insertOne(adminUser);
+    } else if (!adminUser.admin) {
+      await collections.users.updateOne({ id: 'admin' }, { $set: { admin: true } });
+      adminUser.admin = true;
+    }
+
+    json(res, 200, {
+      user: { id: adminUser.id, name: adminUser.name, admin: true }
+    }, { 'Set-Cookie': sessionCookie(adminUser) });
   },
 
   /* ---------- admin dashboard ---------- */
