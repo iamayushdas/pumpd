@@ -1,0 +1,17 @@
+{
+  "name": "pumpd",
+  "version": "1.2.4",
+  "private": true,
+  "description": "Self-hosted gym & bodyweight tracker",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "setup": "bash setup.sh",
+    "start": "bash start.sh",
+    "migrate": "cd api && node migrate-exercises.js",
+    "test": "cd frontend && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DuarteSantos8/pumpd"
+  }
+}

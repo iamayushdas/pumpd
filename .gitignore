@@ -1,0 +1,16 @@
+node_modules
+.env
+.env.local
+data/
+*.log
+.DS_Store
+.vscode
+.idea
+dist
+.vercel
+frontend/dist
+frontend/node_modules
+api/node_modules
+ios
+android
+.capacitor

@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: pumpd
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DB
+        value: pumpd
+      - key: RP_ID
+        sync: false
+      - key: ORIGIN
+        sync: false
+      - key: RP_NAME
+        value: pumpd
+      - key: SESSION_DAYS
+        value: 90
+      - key: ADMIN_UIDS
+        value: ""
+      - key: INVITE_ONLY
+        value: false
+      - key: VAPID_SUBJECT
+        sync: false
