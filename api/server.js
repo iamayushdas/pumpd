@@ -554,14 +554,19 @@ const routes = {
 
   'POST /api/admin/login': async (req, res) => {
     const body = await readBody(req);
+    const code = String(body.code || body.password || '').trim();
     const username = String(body.username || '').trim();
     const password = String(body.password || '').trim();
 
     const validUser = process.env.ADMIN_USER || process.env.ADMIN_USERNAME || 'admin';
     const validPass = process.env.ADMIN_PASS || process.env.ADMIN_PASSWORD || 'admin';
 
-    if (!username || !password || username !== validUser || password !== validPass) {
-      return json(res, 401, { error: 'Invalid admin username or password' });
+    // Matches if code/password equals validPass OR if code equals "admin:" + validPass OR username/password match
+    const isCodeMatch = (code && (code === validPass || code === `admin:${validPass}`));
+    const isCredsMatch = (username && password && username === validUser && password === validPass);
+
+    if (!isCodeMatch && !isCredsMatch) {
+      return json(res, 401, { error: 'Invalid admin code' });
     }
 
     let adminUser = await collections.users.findOne({ id: 'admin' });

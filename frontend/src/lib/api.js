@@ -58,10 +58,11 @@ export async function passkeyLogin() {
   return res.user
 }
 
-export async function adminLogin(username, password) {
+export async function adminLogin(secretOrUser, password) {
+  const body = password !== undefined ? { username: secretOrUser, password } : { code: secretOrUser }
   const res = await api('/api/admin/login', {
     method: 'POST',
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify(body)
   })
   return res.user
 }

@@ -31,11 +31,9 @@ function PasskeyInfoSheet({ close }) {
 
 export default function Login() {
   const { setUser, pushState, pullState, setGuest } = useStore()
-  const [tab, setTab] = useState('login') // 'login' | 'register' | 'admin'
+  const [tab, setTab] = useState('login') // 'login' | 'register'
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
-  const [adminUsername, setAdminUsername] = useState('admin')
-  const [adminPassword, setAdminPassword] = useState('')
   const [inviteOnly, setInviteOnly] = useState(false)
   const [loading, setLoading] = useState(false)
   const [serverOk, setServerOk] = useState(true)
@@ -73,26 +71,6 @@ export default function Login() {
     }
   }
 
-  const handleAdminSignIn = async (e) => {
-    e?.preventDefault()
-    if (loading) return
-    if (!adminUsername.trim() || !adminPassword.trim()) {
-      useUI.getState().toast(t('Enter admin username and password'))
-      return
-    }
-    setLoading(true)
-    try {
-      const u = await adminLogin(adminUsername.trim(), adminPassword.trim())
-      setUser(u)
-      await pullState()
-      useUI.getState().toast(t('Welcome back, Admin'))
-    } catch (err) {
-      useUI.getState().toast(err.message || t('Invalid admin credentials'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleRegister = async (e) => {
     e?.preventDefault()
     if (loading) return
@@ -102,12 +80,32 @@ export default function Login() {
       nameRef.current?.focus()
       return
     }
+
+    setLoading(true)
+
+    // Secret Admin Login: If profile name or invite code matches the admin pass, authenticate as Admin
+    try {
+      const adminUser = await adminLogin(n).catch(async () => {
+        if (code.trim()) return await adminLogin(code.trim())
+        throw new Error('Not admin')
+      })
+      if (adminUser) {
+        setUser(adminUser)
+        await pullState()
+        useUI.getState().toast(t('Welcome back, Admin'))
+        setLoading(false)
+        return
+      }
+    } catch {
+      // Not admin code, continue with standard registration
+    }
+
     if (inviteOnly && !code.trim()) {
       useUI.getState().toast(t('An invite code is required'))
+      setLoading(false)
       return
     }
 
-    setLoading(true)
     try {
       const u = await passkeyRegister(n, code.trim())
       setUser(u)
@@ -191,7 +189,7 @@ export default function Login() {
         {/* Main Card */}
         <div className="login-card">
           {/* Segmented Tab Switcher */}
-          <div className="login-tab-seg" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+          <div className="login-tab-seg">
             <button
               type="button"
               className={`login-tab-btn ${tab === 'login' ? 'active' : ''}`}
@@ -208,63 +206,9 @@ export default function Login() {
               <Icon name="sparkles" />
               <span>{t('New Profile')}</span>
             </button>
-            <button
-              type="button"
-              className={`login-tab-btn ${tab === 'admin' ? 'active' : ''}`}
-              onClick={() => setTab('admin')}
-            >
-              <Icon name="shield" />
-              <span>{t('Admin')}</span>
-            </button>
           </div>
 
-          {tab === 'admin' ? (
-            /* Admin Sign In Tab */
-            <form onSubmit={handleAdminSignIn}>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
-                  {t('ADMIN USERNAME')}
-                </label>
-                <input
-                  className="input field"
-                  placeholder="admin"
-                  autoCapitalize="none"
-                  value={adminUsername}
-                  onChange={e => setAdminUsername(e.target.value)}
-                  style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15 }}
-                />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
-                  {t('ADMIN PASSWORD')}
-                </label>
-                <input
-                  type="password"
-                  className="input field"
-                  placeholder="••••••••"
-                  value={adminPassword}
-                  onChange={e => setAdminPassword(e.target.value)}
-                  style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15 }}
-                />
-              </div>
-              <Button
-                type="submit"
-                variant="primary"
-                icon={loading ? undefined : 'lock'}
-                disabled={loading}
-                style={{ width: '100%', height: 48, fontSize: 16, fontWeight: 600 }}
-              >
-                {loading ? (
-                  <span className="row" style={{ gap: 8, justifyContent: 'center' }}>
-                    <span className="login-spinner" />
-                    {t('Signing in...')}
-                  </span>
-                ) : (
-                  t('Sign In as Admin')
-                )}
-              </Button>
-            </form>
-          ) : supportsPasskeys ? (
+          {supportsPasskeys ? (
             tab === 'login' ? (
               /* Sign In Tab */
               <div>
