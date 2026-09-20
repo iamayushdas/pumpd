@@ -58,7 +58,9 @@ let collections = {
   posts: null,
   follows: null,
   likes: null,
-  userPhotos: null
+  userPhotos: null,
+  healthMetrics: null,
+  healthSyncLog: null
 };
 
 async function connectMongo() {
@@ -86,6 +88,8 @@ async function connectMongo() {
   collections.follows = db.collection('follows');
   collections.likes = db.collection('likes');
   collections.userPhotos = db.collection('userPhotos');
+  collections.healthMetrics = db.collection('healthMetrics');
+  collections.healthSyncLog = db.collection('healthSyncLog');
   
   // Create indexes
   await collections.users.createIndex({ id: 1 }, { unique: true });
@@ -100,6 +104,15 @@ async function connectMongo() {
   await collections.media.createIndex({ filename: 1 });
   await collections.accessRequests.createIndex({ email: 1 });
   await collections.accessRequests.createIndex({ status: 1 });
+  
+  // Health metrics indexes
+  await collections.healthMetrics.createIndex({ userId: 1, date: -1 });
+  await collections.healthMetrics.createIndex({ userId: 1, metricType: 1, date: -1 });
+  await collections.healthMetrics.createIndex({ date: 1 }, { expireAfterSeconds: 7776000 }); // 90 days TTL
+  
+  // Health sync log indexes
+  await collections.healthSyncLog.createIndex({ userId: 1, syncedAt: -1 });
+  await collections.healthSyncLog.createIndex({ userId: 1, platform: 1 });
   
   // Social media indexes
   await collections.posts.createIndex({ userId: 1, created: -1 });
@@ -321,6 +334,37 @@ function startReminderLoop() {
       console.error('reminder loop error:', e.message);
     }
   }, 10000).unref();
+}
+
+/* ---------- self-referencing reloader (keep-alive for Render) ---------- */
+async function startKeepAliveReloader() {
+  // Only start keep-alive on production (when ORIGIN is not localhost)
+  if (ORIGIN.includes('localhost') || ORIGIN.includes('127.0.0.1')) {
+    console.log('[Keep-Alive] Disabled on local development');
+    return;
+  }
+  
+  const httpModule = ORIGIN.startsWith('https') ? await import('https') : await import('http');
+  const interval = 30000; // 30 seconds
+  
+  function reloadServer() {
+    try {
+      httpModule.get(ORIGIN, (res) => {
+        if (res.statusCode === 200) {
+          console.log(`[Keep-Alive] Pinged at ${new Date().toISOString()} (${res.statusCode})`);
+        } else {
+          console.warn(`[Keep-Alive] Unexpected status: ${res.statusCode}`);
+        }
+      }).on('error', (err) => {
+        console.error(`[Keep-Alive] Ping failed: ${err.message}`);
+      }).setTimeout(5000);
+    } catch (err) {
+      console.error(`[Keep-Alive] Error: ${err.message}`);
+    }
+  }
+  
+  setInterval(reloadServer, interval).unref();
+  console.log(`[Keep-Alive] Started: pinging every ${interval / 1000}s to keep Render instance active`);
 }
 
 /* ---------- sessions (signed cookie) ---------- */
@@ -1417,13 +1461,181 @@ const routes = {
         created: new Date().toISOString()
       });
       
-      json(res, 200, { photoId, size: compressed.length });
-    } catch (e) {
-      console.error('photo upload error:', e.message);
-      json(res, 500, { error: 'failed to process image' });
-    }
-  }
-};
+       json(res, 200, { photoId, size: compressed.length });
+     } catch (e) {
+       console.error('photo upload error:', e.message);
+       json(res, 500, { error: 'failed to process image' });
+     }
+   },
+
+   /* ---------- Health Metrics: Apple Health & Google Fit Integration ---------- */
+   'POST /api/health/sync': async (req, res) => {
+     const user = await readSession(req);
+     if (!user) return json(res, 401, { error: 'not signed in' });
+
+     const body = await readBody(req);
+     const data = JSON.parse(body);
+     const { metrics, platform, lastSyncTime } = data;
+
+     if (!metrics || !Array.isArray(metrics) || !platform) {
+       return json(res, 400, { error: 'metrics array and platform required' });
+     }
+
+     try {
+       const userId = user.id;
+       const syncedAt = new Date().toISOString();
+
+       // Store metrics in MongoDB
+       const insertOps = metrics.map(metric => ({
+         insertOne: {
+           document: {
+             userId,
+             metricType: metric.type, // 'steps', 'distance', 'calories', 'heart_rate', 'sleep'
+             value: metric.value,
+             unit: metric.unit,
+             date: metric.date,
+             source: metric.source || platform,
+             platform,
+             timestamp: metric.timestamp || Date.now(),
+             createdAt: new Date()
+           }
+         }
+       }));
+
+       if (insertOps.length > 0) {
+         await collections.healthMetrics.bulkWrite(insertOps);
+       }
+
+       // Log the sync
+       await collections.healthSyncLog.insertOne({
+         userId,
+         platform,
+         metricsCount: metrics.length,
+         lastSyncTime,
+         syncedAt,
+         syncStatus: 'success'
+       });
+
+       json(res, 200, { 
+         ok: true, 
+         synced: metrics.length,
+         syncTime: syncedAt 
+       });
+     } catch (e) {
+       console.error('health sync error:', e.message);
+       await collections.healthSyncLog.insertOne({
+         userId: user.id,
+         platform,
+         syncStatus: 'failed',
+         error: e.message,
+         syncedAt: new Date().toISOString()
+       });
+       json(res, 500, { error: 'sync failed' });
+     }
+   },
+
+   'GET /api/health/metrics': async (req, res) => {
+     const user = await readSession(req);
+     if (!user) return json(res, 401, { error: 'not signed in' });
+
+     const url = new URL(req.url, 'http://x');
+     const metricType = url.searchParams.get('type');
+     const days = parseInt(url.searchParams.get('days') || '30', 10);
+     const startDate = new Date();
+     startDate.setDate(startDate.getDate() - days);
+
+     try {
+       const query = {
+         userId: user.id,
+         date: { $gte: startDate.toISOString().split('T')[0] }
+       };
+       
+       if (metricType) {
+         query.metricType = metricType;
+       }
+
+       const metrics = await collections.healthMetrics
+         .find(query)
+         .sort({ date: -1 })
+         .toArray();
+
+       json(res, 200, { metrics });
+     } catch (e) {
+       console.error('health metrics fetch error:', e.message);
+       json(res, 500, { error: 'failed to fetch metrics' });
+     }
+   },
+
+   'GET /api/health/summary': async (req, res) => {
+     const user = await readSession(req);
+     if (!user) return json(res, 401, { error: 'not signed in' });
+
+     const url = new URL(req.url, 'http://x');
+     const days = parseInt(url.searchParams.get('days') || '7', 10);
+     const startDate = new Date();
+     startDate.setDate(startDate.getDate() - days);
+     const startDateStr = startDate.toISOString().split('T')[0];
+
+     try {
+       const pipeline = [
+         {
+           $match: {
+             userId: user.id,
+             date: { $gte: startDateStr }
+           }
+         },
+         {
+           $group: {
+             _id: '$metricType',
+             total: { $sum: '$value' },
+             avg: { $avg: '$value' },
+             max: { $max: '$value' },
+             min: { $min: '$value' },
+             count: { $sum: 1 }
+           }
+         }
+       ];
+
+       const summary = await collections.healthMetrics
+         .aggregate(pipeline)
+         .toArray();
+
+       const result = {};
+       summary.forEach(stat => {
+         result[stat._id] = {
+           total: Math.round(stat.total),
+           average: Math.round(stat.avg),
+           max: Math.round(stat.max),
+           min: Math.round(stat.min),
+           dataPoints: stat.count
+         };
+       });
+
+       json(res, 200, { summary: result, days });
+     } catch (e) {
+       console.error('health summary error:', e.message);
+       json(res, 500, { error: 'failed to generate summary' });
+     }
+   },
+
+   'GET /api/health/sync-status': async (req, res) => {
+     const user = await readSession(req);
+     if (!user) return json(res, 401, { error: 'not signed in' });
+
+     try {
+       const syncLog = await collections.healthSyncLog
+         .find({ userId: user.id })
+         .sort({ syncedAt: -1 })
+         .limit(10)
+         .toArray();
+
+       json(res, 200, { syncLog });
+     } catch (e) {
+       console.error('sync status error:', e.message);
+       json(res, 500, { error: 'failed to fetch sync status' });
+     }
+   }
+ };
 
 async function main() {
   try {
@@ -1634,7 +1846,10 @@ async function main() {
       }
       
       json(res, 404, { error: 'not found' });
-    }).listen(PORT, '0.0.0.0', () => console.log(`gym-api on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN}, db=${MONGO_DB})`));
+    }).listen(PORT, '0.0.0.0', () => {
+      console.log(`gym-api on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN}, db=${MONGO_DB})`);
+      startKeepAliveReloader();
+    });
   } catch (e) {
     console.error('Failed to start server:', e.message);
     process.exit(1);

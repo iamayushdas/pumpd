@@ -17,6 +17,9 @@ import {
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
+import { HealthMetrics } from '../components/HealthMetrics.jsx'
+import { HealthWeb } from '../components/HealthWeb.jsx'
+import { HealthChart } from '../components/HealthChart.jsx'
 
 /* ---------- Muscle Stimulus & Balance Card ---------- */
 function MuscleBalance({ S }) {
@@ -243,7 +246,7 @@ function EffortCard({ S }) {
 export default function Stats() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
-  const [tab, setTab] = useState('overview') // 'overview' | 'muscles' | 'progress' | 'all'
+  const [tab, setTab] = useState('overview') // 'overview' | 'muscles' | 'progress' | 'health' | 'all'
   const [range, setRange] = useState(90)
   const [exId, setExId] = useState(null)
   const [exMetric, setExMetric] = useState('top')
@@ -389,33 +392,41 @@ export default function Stats() {
         </div>
       </div>
 
-      {/* Section View Tabs */}
-      <div className="login-tab-seg" style={{ marginBottom: 16 }}>
-        <button
-          type="button"
-          className={`login-tab-btn ${tab === 'overview' ? 'active' : ''}`}
-          onClick={() => setTab('overview')}
-        >
-          <Icon name="calendar" />
-          <span>{t('Overview')}</span>
-        </button>
-        <button
-          type="button"
-          className={`login-tab-btn ${tab === 'muscles' ? 'active' : ''}`}
-          onClick={() => setTab('muscles')}
-        >
-          <Icon name="figureStrength" />
-          <span>{t('Muscles & Effort')}</span>
-        </button>
-        <button
-          type="button"
-          className={`login-tab-btn ${tab === 'progress' ? 'active' : ''}`}
-          onClick={() => setTab('progress')}
-        >
-          <Icon name="chart" />
-          <span>{t('Progress')}</span>
-        </button>
-      </div>
+       {/* Section View Tabs */}
+       <div className="login-tab-seg" style={{ marginBottom: 16 }}>
+         <button
+           type="button"
+           className={`login-tab-btn ${tab === 'overview' ? 'active' : ''}`}
+           onClick={() => setTab('overview')}
+         >
+           <Icon name="calendar" />
+           <span>{t('Overview')}</span>
+         </button>
+         <button
+           type="button"
+           className={`login-tab-btn ${tab === 'muscles' ? 'active' : ''}`}
+           onClick={() => setTab('muscles')}
+         >
+           <Icon name="figureStrength" />
+           <span>{t('Muscles & Effort')}</span>
+         </button>
+         <button
+           type="button"
+           className={`login-tab-btn ${tab === 'progress' ? 'active' : ''}`}
+           onClick={() => setTab('progress')}
+         >
+           <Icon name="chart" />
+           <span>{t('Progress')}</span>
+         </button>
+         <button
+           type="button"
+           className={`login-tab-btn ${tab === 'health' ? 'active' : ''}`}
+           onClick={() => setTab('health')}
+         >
+           <Icon name="heart" />
+           <span>{t('Health')}</span>
+         </button>
+       </div>
 
       {/* TAB 1: OVERVIEW */}
       {(tab === 'overview' || tab === 'all') && (
@@ -604,6 +615,51 @@ export default function Stats() {
             )}
           </div>
         </div>
+      )}
+
+      {/* TAB 4: HEALTH & FITNESS */}
+      {(tab === 'health' || tab === 'all') && (
+        <>
+          {/* Health Summary Card */}
+          <div className="card" style={{ marginBottom: 14 }}>
+            <div className="row between" style={{ marginBottom: 12 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{t('Health Metrics')}</h2>
+                <div className="t-cap muted" style={{ marginTop: 2 }}>{t('Steps, distance, calories & more')}</div>
+              </div>
+              <Button size="sm" variant="primary" icon="plus" onClick={() => setTab('manual')}>
+                {t('Log')}
+              </Button>
+            </div>
+            <HealthMetrics days={7} />
+          </div>
+
+          {/* Steps Chart */}
+          <HealthChart metricType="steps" days={30} />
+
+          {/* Distance & Calories */}
+          <div className="cols">
+            <HealthChart metricType="distance" days={30} />
+            <HealthChart metricType="calories" days={30} />
+          </div>
+
+          {/* Heart Rate & Sleep */}
+          <div className="cols">
+            <HealthChart metricType="heart_rate" days={30} />
+            <HealthChart metricType="sleep" days={30} />
+          </div>
+
+          {/* Manual Entry */}
+          <div className="card" style={{ marginBottom: 14 }}>
+            <div className="row between" style={{ marginBottom: 12 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{t('Log Health Data')}</h2>
+                <div className="t-cap muted" style={{ marginTop: 2 }}>{t('Add metrics manually')}</div>
+              </div>
+            </div>
+            <HealthWeb />
+          </div>
+        </>
       )}
     </div>
   )

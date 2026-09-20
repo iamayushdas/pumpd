@@ -30,6 +30,7 @@ import NewPost from './views/NewPost.jsx'
 import UserProfile from './views/UserProfile.jsx'
 import Discover from './views/Discover.jsx'
 import HandleSetup from './views/HandleSetup.jsx'
+import Health from './views/Health.jsx'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
 
@@ -81,6 +82,7 @@ function Shell() {
               <Route path="/stats" element={<Stats />} />
               <Route path="/history" element={<History />} />
               <Route path="/library" element={<Library />} />
+              <Route path="/health" element={<Health />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
               <Route path="/feed" element={<Feed />} />
