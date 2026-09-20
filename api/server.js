@@ -11,6 +11,7 @@ import {
   generateAuthenticationOptions, verifyAuthenticationResponse
 } from '@simplewebauthn/server';
 import webpush from 'web-push';
+import nodemailer from 'nodemailer';
 
 const PORT = +(process.env.PORT || 3000);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017';
@@ -24,6 +25,13 @@ const INVITE_ONLY = /^(1|true|yes|on)$/i.test(process.env.INVITE_ONLY || '');
 const SESSION_DAYS = Math.max(1, +(process.env.SESSION_DAYS || 90) || 90);
 const MAX_BODY = 5 * 1024 * 1024;
 const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
+
+// Email configuration
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = +(process.env.SMTP_PORT || 587);
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || 'pumpd <noreply@localhost>';
 
 // Ensure data directory exists for secrets and VAPID keys
 fs.mkdirSync(DATA, { recursive: true });
@@ -129,6 +137,78 @@ function scheduleRestTimer(userId, sec) {
     restTimers.delete(userId);
     sendPush(userId, { title: 'Rest over 💪', body: 'Time for your next set.', tag: 'rest-timer' });
   }, sec * 1000));
+}
+
+/* ---------- email sending ---------- */
+let mailTransporter = null;
+
+function initMailTransporter() {
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+    console.log('[Email] SMTP not configured - emails will not be sent');
+    return null;
+  }
+  
+  try {
+    mailTransporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS
+      }
+    });
+    console.log('[Email] SMTP transporter initialized');
+    return mailTransporter;
+  } catch (e) {
+    console.error('[Email] Failed to initialize SMTP:', e.message);
+    return null;
+  }
+}
+
+async function sendEmail(to, subject, text, html) {
+  if (!mailTransporter) {
+    mailTransporter = initMailTransporter();
+    if (!mailTransporter) {
+      console.log('[Email] Skipping email to', to, '- SMTP not configured');
+      return { skipped: true };
+    }
+  }
+  
+  try {
+    const info = await mailTransporter.sendMail({
+      from: SMTP_FROM,
+      to,
+      subject,
+      text,
+      html
+    });
+    console.log('[Email] Sent to', to, '- Message ID:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (e) {
+    console.error('[Email] Failed to send to', to, ':', e.message);
+    return { error: e.message };
+  }
+}
+
+async function sendInviteCodeEmail(email, name, code) {
+  const subject = `Your ${RP_NAME} Invite Code`;
+  const text = `Hi ${name},\n\nYour access request has been approved!\n\nYour invite code is: ${code}\n\nUse this code to create your account at ${ORIGIN}\n\nWelcome to ${RP_NAME}!`;
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #30d158;">Welcome to ${RP_NAME}!</h2>
+      <p>Hi ${name},</p>
+      <p>Your access request has been approved!</p>
+      <div style="background: #f5f5f5; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
+        <p style="margin: 0 0 10px; color: #666; font-size: 14px;">Your Invite Code</p>
+        <p style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 2px; color: #000;">${code}</p>
+      </div>
+      <p>Use this code to create your account at <a href="${ORIGIN}" style="color: #30d158;">${ORIGIN}</a></p>
+      <p style="color: #666; font-size: 14px; margin-top: 30px;">Welcome aboard!<br>— The ${RP_NAME} Team</p>
+    </div>
+  `;
+  
+  return sendEmail(email, subject, text, html);
 }
 function cancelRestTimer(userId) {
   const t = restTimers.get(userId);
@@ -756,7 +836,10 @@ const routes = {
       { $set: { status: 'approved', approvedBy: admin.id, approvedAt: new Date().toISOString(), inviteCode: code } }
     );
     
-    json(res, 200, { ok: true, code });
+    // Send invite code via email
+    const emailResult = await sendInviteCodeEmail(request.email, request.name, code);
+    
+    json(res, 200, { ok: true, code, emailSent: emailResult.success || false });
   },
 
   'POST /api/admin/access-request/reject': async (req, res) => {

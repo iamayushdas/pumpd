@@ -70,13 +70,16 @@ function AccessRequestsCard({ requests, reload }) {
   const handleApprove = (req) => {
     confirmSheet({
       title: 'Approve ' + req.name + '?',
-      message: 'An invite code will be generated for ' + req.email,
+      message: 'An invite code will be generated and emailed to ' + req.email,
       confirmText: 'Approve',
       onConfirm: () => {
         approveAccessRequest(req._id)
-          .then(({ code }) => {
+          .then(({ code, emailSent }) => {
             navigator.clipboard?.writeText(code).catch(() => {})
-            toast('Approved! Code ' + code + ' copied')
+            const msg = emailSent 
+              ? 'Approved! Code ' + code + ' sent to ' + req.email 
+              : 'Approved! Code ' + code + ' copied (email not configured)'
+            toast(msg)
             reload()
           })
           .catch(e => toast(e.message))
