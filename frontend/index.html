@@ -5,16 +5,199 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>pumpd.</title>
 <meta name="description" content="Personal gym & body weight tracker">
-<meta name="theme-color" content="#0c0e12">
+<meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="pumpd.">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="apple-touch-icon" href="favicon.svg">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+/* Instant splash screen for iOS / WebKit / Mobile browsers */
+#splash-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999999;
+  background: #000000;
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  overflow: hidden;
+  -webkit-transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), -webkit-transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: opacity, transform;
+}
+#splash-overlay.splash-exit {
+  opacity: 0;
+  -webkit-transform: scale(1.04);
+  transform: scale(1.04);
+  pointer-events: none;
+}
+.splash-glow {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(48, 209, 88, 0.25) 0%, transparent 70%);
+  -webkit-filter: blur(50px);
+  filter: blur(50px);
+  pointer-events: none;
+  -webkit-animation: splashGlowPulse 1.8s ease-in-out infinite alternate;
+  animation: splashGlowPulse 1.8s ease-in-out infinite alternate;
+}
+@-webkit-keyframes splashGlowPulse {
+  0% { -webkit-transform: scale(0.85); opacity: 0.5; }
+  100% { -webkit-transform: scale(1.2); opacity: 0.9; }
+}
+@keyframes splashGlowPulse {
+  0% { transform: scale(0.85); opacity: 0.5; }
+  100% { transform: scale(1.2); opacity: 0.9; }
+}
+.splash-word {
+  display: -webkit-inline-box;
+  display: -webkit-inline-flex;
+  display: inline-flex;
+  -webkit-box-align: baseline;
+  -webkit-align-items: baseline;
+  align-items: baseline;
+  -webkit-box-pack: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  font-size: clamp(54px, 14vw, 86px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  position: relative;
+  z-index: 1;
+}
+.splash-char {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+  -webkit-animation-duration: 0.85s;
+  animation-duration: 0.85s;
+  -webkit-animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-animation-fill-mode: forwards;
+  animation-fill-mode: forwards;
+  opacity: 0;
+}
+.char-p1 { -webkit-animation-name: flowInP1; animation-name: flowInP1; }
+.char-u { -webkit-animation-name: flowInU; animation-name: flowInU; -webkit-animation-delay: 0.08s; animation-delay: 0.08s; }
+.char-m { -webkit-animation-name: flowInM; animation-name: flowInM; -webkit-animation-delay: 0.16s; animation-delay: 0.16s; }
+.char-p2 { -webkit-animation-name: flowInP2; animation-name: flowInP2; -webkit-animation-delay: 0.24s; animation-delay: 0.24s; }
+.char-d { -webkit-animation-name: flowInD; animation-name: flowInD; -webkit-animation-delay: 0.32s; animation-delay: 0.32s; }
+.char-dot {
+  color: #30d158;
+  -webkit-animation-name: flowInDot;
+  animation-name: flowInDot;
+  -webkit-animation-delay: 0.44s;
+  animation-delay: 0.44s;
+}
+
+@-webkit-keyframes flowInP1 {
+  0% { opacity: 0; -webkit-transform: translate3d(-140px, -80px, 0) rotate(-28deg) scale(0.3); -webkit-filter: blur(8px); }
+  60% { opacity: 1; -webkit-filter: blur(0); }
+  85% { -webkit-transform: translate3d(2px, 0px, 0) rotate(2deg) scale(1.05); }
+  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) rotate(0deg) scale(1); -webkit-filter: blur(0); }
+}
+@keyframes flowInP1 {
+  0% { opacity: 0; transform: translate3d(-140px, -80px, 0) rotate(-28deg) scale(0.3); filter: blur(8px); }
+  60% { opacity: 1; filter: blur(0); }
+  85% { transform: translate3d(2px, 0px, 0) rotate(2deg) scale(1.05); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg) scale(1); filter: blur(0); }
+}
+
+@-webkit-keyframes flowInU {
+  0% { opacity: 0; -webkit-transform: translate3d(-80px, 120px, 0) rotate(24deg) scale(0.3); -webkit-filter: blur(8px); }
+  60% { opacity: 1; -webkit-filter: blur(0); }
+  85% { -webkit-transform: translate3d(-1px, -2px, 0) rotate(-2deg) scale(1.04); }
+  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) rotate(0deg) scale(1); -webkit-filter: blur(0); }
+}
+@keyframes flowInU {
+  0% { opacity: 0; transform: translate3d(-80px, 120px, 0) rotate(24deg) scale(0.3); filter: blur(8px); }
+  60% { opacity: 1; filter: blur(0); }
+  85% { transform: translate3d(-1px, -2px, 0) rotate(-2deg) scale(1.04); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg) scale(1); filter: blur(0); }
+}
+
+@-webkit-keyframes flowInM {
+  0% { opacity: 0; -webkit-transform: translate3d(0, -140px, 0) rotate(-14deg) scale(0.2); -webkit-filter: blur(10px); }
+  60% { opacity: 1; -webkit-filter: blur(0); }
+  85% { -webkit-transform: translate3d(0, 2px, 0) rotate(1deg) scale(1.06); }
+  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) rotate(0deg) scale(1); -webkit-filter: blur(0); }
+}
+@keyframes flowInM {
+  0% { opacity: 0; transform: translate3d(0, -140px, 0) rotate(-14deg) scale(0.2); filter: blur(10px); }
+  60% { opacity: 1; filter: blur(0); }
+  85% { transform: translate3d(0, 2px, 0) rotate(1deg) scale(1.06); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg) scale(1); filter: blur(0); }
+}
+
+@-webkit-keyframes flowInP2 {
+  0% { opacity: 0; -webkit-transform: translate3d(90px, 130px, 0) rotate(-22deg) scale(0.3); -webkit-filter: blur(8px); }
+  60% { opacity: 1; -webkit-filter: blur(0); }
+  85% { -webkit-transform: translate3d(1px, -2px, 0) rotate(2deg) scale(1.04); }
+  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) rotate(0deg) scale(1); -webkit-filter: blur(0); }
+}
+@keyframes flowInP2 {
+  0% { opacity: 0; transform: translate3d(90px, 130px, 0) rotate(-22deg) scale(0.3); filter: blur(8px); }
+  60% { opacity: 1; filter: blur(0); }
+  85% { transform: translate3d(1px, -2px, 0) rotate(2deg) scale(1.04); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg) scale(1); filter: blur(0); }
+}
+
+@-webkit-keyframes flowInD {
+  0% { opacity: 0; -webkit-transform: translate3d(140px, -90px, 0) rotate(26deg) scale(0.3); -webkit-filter: blur(8px); }
+  60% { opacity: 1; -webkit-filter: blur(0); }
+  85% { -webkit-transform: translate3d(-2px, 1px, 0) rotate(-1deg) scale(1.05); }
+  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) rotate(0deg) scale(1); -webkit-filter: blur(0); }
+}
+@keyframes flowInD {
+  0% { opacity: 0; transform: translate3d(140px, -90px, 0) rotate(26deg) scale(0.3); filter: blur(8px); }
+  60% { opacity: 1; filter: blur(0); }
+  85% { transform: translate3d(-2px, 1px, 0) rotate(-1deg) scale(1.05); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg) scale(1); filter: blur(0); }
+}
+
+@-webkit-keyframes flowInDot {
+  0% { opacity: 0; -webkit-transform: translate3d(60px, -150px, 0) scale(0); -webkit-filter: blur(6px); }
+  60% { opacity: 1; -webkit-transform: translate3d(0, 4px, 0) scale(1.4); -webkit-filter: drop-shadow(0 0 16px #30d158); }
+  80% { -webkit-transform: translate3d(0, -3px, 0) scale(0.9); }
+  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) scale(1); -webkit-filter: drop-shadow(0 0 10px rgba(48, 209, 88, 0.4)); }
+}
+@keyframes flowInDot {
+  0% { opacity: 0; transform: translate3d(60px, -150px, 0) scale(0); filter: blur(6px); }
+  60% { opacity: 1; transform: translate3d(0, 4px, 0) scale(1.4); filter: drop-shadow(0 0 16px #30d158); }
+  80% { transform: translate3d(0, -3px, 0) scale(0.9); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: drop-shadow(0 0 10px rgba(48, 209, 88, 0.4)); }
+}
+</style>
 </head>
-<body>
+<body style="background: #000000; margin: 0;">
+<div id="splash-overlay" aria-hidden="true">
+  <div class="splash-glow"></div>
+  <div class="splash-word">
+    <span class="splash-char char-p1">p</span>
+    <span class="splash-char char-u">u</span>
+    <span class="splash-char char-m">m</span>
+    <span class="splash-char char-p2">p</span>
+    <span class="splash-char char-d">d</span>
+    <span class="splash-char char-dot">.</span>
+  </div>
+</div>
 <div id="root"></div>
 <script type="module" src="/src/main.jsx"></script>
 </body>

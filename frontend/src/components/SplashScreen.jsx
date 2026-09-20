@@ -1,40 +1,25 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 
-export default function SplashScreen({ onFinish }) {
-  const [fading, setFading] = useState(false)
-  const [visible, setVisible] = useState(true)
-
+export default function SplashScreen() {
   useEffect(() => {
-    // Start exit transition after letters assemble and hold
+    const splashEl = document.getElementById('splash-overlay')
+    if (!splashEl) return
+
     const timerExit = setTimeout(() => {
-      setFading(true)
+      splashEl.classList.add('splash-exit')
     }, 1600)
 
-    // Complete removal after fade-out transition
     const timerDone = setTimeout(() => {
-      setVisible(false)
-      if (onFinish) onFinish()
-    }, 2050)
+      if (splashEl && splashEl.parentNode) {
+        splashEl.parentNode.removeChild(splashEl)
+      }
+    }, 2100)
 
     return () => {
       clearTimeout(timerExit)
       clearTimeout(timerDone)
     }
-  }, [onFinish])
+  }, [])
 
-  if (!visible) return null
-
-  return (
-    <div className={`splash-overlay ${fading ? 'splash-exit' : ''}`} aria-hidden="true">
-      <div className="splash-glow" />
-      <div className="splash-word">
-        <span className="splash-char char-p1">p</span>
-        <span className="splash-char char-u">u</span>
-        <span className="splash-char char-m">m</span>
-        <span className="splash-char char-p2">p</span>
-        <span className="splash-char char-d">d</span>
-        <span className="splash-char char-dot">.</span>
-      </div>
-    </div>
-  )
+  return null
 }
