@@ -1888,6 +1888,11 @@ h4.sec{
 :root[data-theme="light"] .login-tab-seg{
   background:rgba(118,118,128,.12);
 }
+
+.login-tab-seg > :nth-child(3):last-child{
+  grid-column:1 / -1;
+}
+
 .login-tab-btn{
   display:flex;
   align-items:center;
