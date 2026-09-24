@@ -21,8 +21,8 @@ self.addEventListener('push', e => {
   
   e.waitUntil(self.registration.showNotification(data.title || 'pumpd', {
     body: data.body || 'Test notification',
-    icon: '/icon-512.png',
-    badge: '/icon-180.png',
+    icon: '/pumpd-icon-512.png',
+    badge: '/pumpd-icon-180.png',
     tag: data.tag || 'opengym',
     renotify: true
   }))
