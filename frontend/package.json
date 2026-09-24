@@ -27,7 +27,15 @@
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^7.6.8",
     "@capacitor/ios": "^7.6.8",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
     "@vitejs/plugin-react": "^6.0.3",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.3.3",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"
   }

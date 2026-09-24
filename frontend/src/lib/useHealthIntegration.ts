@@ -1,11 +1,11 @@
 import { useEffect, useCallback, useState } from 'react'
-import { 
+import {
   checkHealthAuthorization,
   fetchHealthMetrics,
   syncHealthMetrics,
-  startHealthSyncInterval,
-  HealthSyncStatus
+  startHealthSyncInterval
 } from './healthKit'
+import type { HealthSyncStatus } from '../types/health'
 
 export interface UseHealthIntegrationOptions {
   autoSync?: boolean

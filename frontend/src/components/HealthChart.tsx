@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { t } from '../lib/i18n.js'
+import { t } from '../lib/i18n'
 
 export function HealthChart({ metricType, days = 30 }) {
   const [data, setData] = useState([])
