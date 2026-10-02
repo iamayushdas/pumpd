@@ -9,7 +9,6 @@ import { setNav } from './lib/nav'
 import { useWakeLock } from './lib/wakelock'
 import { startFlow } from './sheets'
 import SplashScreen from './components/SplashScreen'
-import Icon from './components/Icon'
 import TabBar from './components/TabBar'
 import ErrorBoundary from './components/ErrorBoundary'
 import Modals from './components/Modals'
@@ -25,6 +24,7 @@ import History from './views/History'
 import Library from './views/Library'
 import Settings from './views/Settings'
 import Admin from './views/Admin'
+import Management from './views/Management'
 import Feed from './views/Feed'
 import NewPost from './views/NewPost'
 import UserProfile from './views/UserProfile'
@@ -43,8 +43,8 @@ function applyPrefs(theme, accent) {
   const de = document.documentElement
   de.dataset.theme = theme === 'light' ? 'light' : 'dark'
   de.dataset.accent = ACCENTS[accent] ? accent : 'lime'
-  const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.content = de.dataset.theme === 'light' ? '#f2f2f7' : '#000000'
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  if (meta) meta.content = de.dataset.theme === 'light' ? '#f2f2f7' : '#070708'
 }
 
 function Shell() {
@@ -85,6 +85,7 @@ function Shell() {
               <Route path="/health" element={<Health />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
+              <Route path="/management" element={<Management />} />
               <Route path="/feed" element={<Feed />} />
               <Route path="/new-post" element={<NewPost />} />
               <Route path="/profile/:handle" element={<ProfileWrapper />} />

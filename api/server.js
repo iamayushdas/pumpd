@@ -60,7 +60,15 @@ let collections = {
   likes: null,
   userPhotos: null,
   healthMetrics: null,
-  healthSyncLog: null
+  healthSyncLog: null,
+  gyms: null,
+  managementRequests: null,
+  schedules: null,
+  customExercises: null,
+  diets: null,
+  fees: null,
+  assignmentLogs: null,
+  trainingPlans: null
 };
 
 async function connectMongo() {
@@ -90,6 +98,14 @@ async function connectMongo() {
   collections.userPhotos = db.collection('userPhotos');
   collections.healthMetrics = db.collection('healthMetrics');
   collections.healthSyncLog = db.collection('healthSyncLog');
+  collections.gyms = db.collection('gyms');
+  collections.managementRequests = db.collection('managementRequests');
+  collections.schedules = db.collection('schedules');
+  collections.customExercises = db.collection('customExercises');
+  collections.diets = db.collection('diets');
+  collections.fees = db.collection('fees');
+  collections.assignmentLogs = db.collection('assignmentLogs');
+  collections.trainingPlans = db.collection('trainingPlans');
   
   // Create indexes
   await collections.users.createIndex({ id: 1 }, { unique: true });
@@ -113,6 +129,20 @@ async function connectMongo() {
   // Health sync log indexes
   await collections.healthSyncLog.createIndex({ userId: 1, syncedAt: -1 });
   await collections.healthSyncLog.createIndex({ userId: 1, platform: 1 });
+
+  // Gym operations indexes
+  await collections.gyms.createIndex({ id: 1 }, { unique: true });
+  await collections.gyms.createIndex({ ownerId: 1 });
+  await collections.managementRequests.createIndex({ status: 1, gymId: 1, created: -1 });
+  await collections.managementRequests.createIndex({ requesterId: 1, status: 1 });
+  await collections.schedules.createIndex({ gymId: 1, memberId: 1, startAt: 1 });
+  await collections.customExercises.createIndex({ gymId: 1, memberId: 1, created: -1 });
+  await collections.diets.createIndex({ gymId: 1, memberId: 1, created: -1 });
+  await collections.fees.createIndex({ gymId: 1, memberId: 1, dueDate: 1 });
+  await collections.assignmentLogs.createIndex({ assignmentId: 1, memberId: 1, created: -1 });
+  await collections.assignmentLogs.createIndex({ gymId: 1, created: -1 });
+  await collections.trainingPlans.createIndex({ memberId: 1, gymId: 1 }, { unique: true });
+  await collections.trainingPlans.createIndex({ trainerId: 1, memberId: 1, updatedAt: -1 });
   
   // Social media indexes
   await collections.posts.createIndex({ userId: 1, created: -1 });
@@ -134,7 +164,71 @@ const secretFile = path.join(DATA, 'secret');
 if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
 const SECRET = fs.readFileSync(secretFile, 'utf8').trim();
 
-const isAdmin = user => !!user && (user.admin === true || user.id === 'admin' || ADMIN_UIDS.includes(user.id));
+const isAdmin = user => !!user && (user.admin === true || user.role === 'admin' || user.id === 'admin' || ADMIN_UIDS.includes(user.id));
+const PERSONA_ROLES = new Set(['member', 'trainer', 'owner']);
+const normalizePersona = role => {
+  const value = String(role || '').trim().toLowerCase();
+  return PERSONA_ROLES.has(value) ? value : 'member';
+};
+const personaOf = user => {
+  if (user?.role === 'admin') return 'admin';
+  return PERSONA_ROLES.has(user?.role) ? user.role : (isAdmin(user) ? 'admin' : 'member');
+};
+const ROLE_NAMES = new Set(['member', 'trainer', 'owner', 'admin']);
+const normalizeAssignedRole = role => {
+  const value = String(role || '').trim().toLowerCase();
+  return ROLE_NAMES.has(value) ? value : 'member';
+};
+const cleanGymId = value => String(value || '').trim().slice(0, 80) || null;
+const publicUser = user => ({
+  id: user.id,
+  name: user.name,
+  role: personaOf(user),
+  admin: isAdmin(user),
+  gymId: cleanGymId(user.gymId),
+  trainerId: String(user.trainerId || '').trim() || null
+});
+const isOwner = user => !!user && !isAdmin(user) && personaOf(user) === 'owner';
+const isTrainer = user => !!user && !isAdmin(user) && personaOf(user) === 'trainer';
+const sameGym = (actor, gymId) => !!actor?.gymId && !!gymId && actor.gymId === gymId;
+const canManageGym = (actor, gymId) => isAdmin(actor) || (isOwner(actor) && sameGym(actor, gymId));
+const canCoachGym = (actor, gymId) => canManageGym(actor, gymId) || (isTrainer(actor) && sameGym(actor, gymId));
+const managedRolesFor = actor => isAdmin(actor) ? ['member', 'trainer', 'owner', 'admin'] : ['member', 'trainer'];
+
+async function ensureGym(gymId, name = null, ownerId = null, createdBy = null) {
+  const cleanId = cleanGymId(gymId);
+  if (!cleanId) return null;
+  const existing = await collections.gyms.findOne({ id: cleanId });
+  if (!existing) {
+    const gym = {
+      id: cleanId,
+      name: String(name || cleanId).trim().slice(0, 80) || cleanId,
+      ownerId: ownerId || null,
+      createdBy: createdBy || null,
+      created: new Date().toISOString()
+    };
+    await collections.gyms.insertOne(gym);
+    return gym;
+  }
+  if (ownerId && !existing.ownerId) {
+    await collections.gyms.updateOne({ id: cleanId }, { $set: { ownerId } });
+  }
+  return existing;
+}
+
+async function requireOrgManager(req, res) {
+  const user = await readSession(req);
+  if (!user) { json(res, 401, { error: 'not signed in' }); return null; }
+  if (!isAdmin(user) && !isOwner(user)) { json(res, 403, { error: 'owner or admin access required' }); return null; }
+  return user;
+}
+
+async function requireCoach(req, res) {
+  const user = await readSession(req);
+  if (!user) { json(res, 401, { error: 'not signed in' }); return null; }
+  if (!['admin', 'owner', 'trainer'].includes(personaOf(user))) { json(res, 403, { error: 'trainer, owner, or admin access required' }); return null; }
+  return user;
+}
 
 /* ---------- push notifications (Web Push / VAPID) ---------- */
 const vapidFile = path.join(DATA, 'vapid.json');
@@ -230,18 +324,19 @@ async function sendAccessRequestNotification(requesterEmail, requesterName, mess
   return sendEmail(adminEmail, subject, text, html);
 }
 
-async function sendInviteCodeEmail(email, name, code) {
+async function sendInviteCodeEmail(email, name, code, assignedRole = 'member', gymId = null) {
   const subject = `Your ${RP_NAME} Invite Code - Let's Get Started!`;
   
   // Create a direct login URL with encoded parameters
   const directLoginUrl = `${ORIGIN}?invite=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`;
   
-  const text = `Hi ${name},\n\nGreat news! Your access request has been approved.\n\nYour invite code is: ${code}\n\nQuick start:\nClick here to get started: ${directLoginUrl}\n\nOr enter manually:\n1. Visit ${ORIGIN}\n2. Click "New Profile" tab\n3. Enter your name\n4. Enter your invite code: ${code}\n5. Set up your passkey (fingerprint, face ID, or security key)\n6. Start tracking your workouts!\n\nWelcome to ${RP_NAME}!`;
+  const text = `Hi ${name},\n\nGreat news! Your access request has been approved.\n\nAssigned role: ${assignedRole}${gymId ? `\nGym: ${gymId}` : ''}\nYour invite code is: ${code}\n\nQuick start:\nClick here to get started: ${directLoginUrl}\n\nOr enter manually:\n1. Visit ${ORIGIN}\n2. Click "New Profile" tab\n3. Enter your name\n4. Enter your invite code: ${code}\n5. Set up your passkey (fingerprint, face ID, or security key)\n6. Start tracking your workouts!\n\nWelcome to ${RP_NAME}!`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <h2 style="color: #30d158;">Welcome to ${RP_NAME}! 💪</h2>
       <p>Hi ${name},</p>
       <p>Great news! Your access request has been approved.</p>
+      <p><strong>Assigned role:</strong> ${assignedRole}${gymId ? ` · Gym: ${gymId}` : ''}</p>
       
       <div style="background: #f5f5f5; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
         <p style="margin: 0 0 10px; color: #666; font-size: 14px;">Your Invite Code</p>
@@ -310,16 +405,35 @@ function startReminderLoop() {
         if (!hasSubs) continue;
         
         const state = await collections.userStates.findOne({ userId: user.id });
-        if (!state?.reminder?.on) continue;
-        
-        const now = userNow(state.reminder.tz || 'UTC');
-        if (!now || state.reminder.time !== now.hhmm) continue;
-        if (user.lastReminder === now.date) continue;
-        if ((state.workouts || []).some(w => w.d === now.date)) continue;
-        
+        if (!state) continue;
+
+        const now = userNow(state.reminder?.tz || 'UTC');
+        if (!now || state.reminder?.on !== true || state.reminder.time !== now.hhmm) continue;
+        const workoutDue = user.lastReminder !== now.date && !(state.workouts || []).some(w => w.d === now.date);
+
+        // Fees are manual by design: remind members three days before the due date,
+        // once per day, and keep the existing workout reminder independent.
+        const reminderUntil = Date.parse(now.date + 'T23:59:59Z') + 3 * 86400000;
+        const feeRecords = await collections.fees.find({
+          memberId: user.id,
+          status: { $in: ['due', 'overdue'] }
+        }).toArray();
+        for (const fee of feeRecords) {
+          const due = Date.parse(String(fee.dueDate || '') + 'T23:59:59Z');
+          if (!Number.isFinite(due) || due > reminderUntil || fee.lastReminder === now.date) continue;
+          const overdue = due < Date.parse(now.date + 'T00:00:00Z');
+          await collections.fees.updateOne({ _id: fee._id }, { $set: { status: overdue ? 'overdue' : 'due', lastReminder: now.date } });
+          sendPush(user.id, {
+            title: overdue ? 'Membership fee overdue' : 'Membership fee due soon',
+            body: `${fee.amount || ''} ${fee.currency || ''} · due ${fee.dueDate}`.trim(),
+            tag: 'fee-reminder-' + fee._id
+          });
+        }
+
+        if (!workoutDue) continue;
         const rid = effectiveRoutineId(state, now.date);
         if (!rid) continue;
-        
+
         const routine = (state.routines || []).find(r => r.id === rid);
         console.log('reminder firing', user.id, rid);
         
@@ -502,7 +616,7 @@ const routes = {
   'GET /api/me': async (req, res) => {
     const user = await readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } });
+    json(res, 200, { user: publicUser(user) });
   },
 
   'POST /api/register/options': async (req, res) => {
@@ -512,10 +626,15 @@ const routes = {
     const code = String(body.code || '').trim().toUpperCase();
     
     const userCount = await collections.users.countDocuments();
+    let invite = null;
     if (INVITE_ONLY && userCount > 0) {
-      const validInvite = await collections.invites.findOne({ code, usedBy: null, revoked: { $ne: true } });
-      if (!validInvite) return json(res, 403, { error: 'a valid invite code is required' });
+      invite = await collections.invites.findOne({ code, usedBy: null, revoked: { $ne: true } });
+      if (!invite) return json(res, 403, { error: 'a valid invite code is required' });
     }
+    // An approved invite is authoritative. This prevents a member from changing
+    // the role selected by an admin/owner during the registration form.
+    const role = normalizePersona(invite?.assignedRole || body.role);
+    const gymId = cleanGymId(invite?.gymId || body.gymId);
     
     const uid = crypto.randomBytes(12).toString('base64url');
     const options = await generateRegistrationOptions({
@@ -525,7 +644,7 @@ const routes = {
       authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
       excludeCredentials: []
     });
-    const cid = putChallenge({ challenge: options.challenge, name, uid, code });
+    const cid = putChallenge({ challenge: options.challenge, name, uid, code, role, gymId });
     json(res, 200, { cid, options });
   },
 
@@ -561,15 +680,22 @@ const routes = {
     const user = {
       id: c.uid,
       name: c.name,
+      role: c.role || 'member',
+      gymId: cleanGymId(c.gymId),
       created: new Date().toISOString(),
       admin: userCount === 0 || ADMIN_UIDS.includes(c.uid)
     };
     if (invite) {
       user.invitedBy = invite.code;
+      user.role = normalizeAssignedRole(invite.assignedRole || user.role);
+      user.gymId = cleanGymId(invite.gymId || user.gymId);
       await collections.invites.updateOne({ code: c.code }, { $set: { usedBy: user.id, usedAt: user.created } });
     }
     
     await collections.users.insertOne(user);
+    if (user.gymId) {
+      await ensureGym(user.gymId, user.gymId, user.role === 'owner' ? user.id : null, user.id);
+    }
     await collections.credentials.insertOne({
       id: credential.id,
       userId: user.id,
@@ -578,7 +704,7 @@ const routes = {
       transports: body.credential?.response?.transports || []
     });
     
-    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } }, { 'Set-Cookie': sessionCookie(user) });
+    json(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(user) });
   },
 
   'POST /api/login/options': async (req, res) => {
@@ -625,7 +751,7 @@ const routes = {
     if (!user) return json(res, 500, { error: 'user missing' });
     if (user.disabled) return json(res, 403, { error: 'this account has been disabled' });
     
-    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } }, { 'Set-Cookie': sessionCookie(user) });
+    json(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(user) });
   },
 
   'POST /api/logout': async (req, res) => json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie }),
@@ -752,6 +878,7 @@ const routes = {
       adminUser = {
         id: 'admin',
         name: 'Admin',
+        role: 'admin',
         created: new Date().toISOString(),
         admin: true
       };
@@ -762,14 +889,51 @@ const routes = {
     }
 
     json(res, 200, {
-      user: { id: adminUser.id, name: adminUser.name, admin: true }
+      user: publicUser(adminUser)
     }, { 'Set-Cookie': sessionCookie(adminUser) });
+  },
+
+  /* ---------- gyms and role operations ---------- */
+  'GET /api/gyms': async (req, res) => {
+    const gyms = await collections.gyms.find({}, { projection: { _id: 0, id: 1, name: 1 } }).sort({ name: 1 }).toArray();
+    const knownGymIds = new Set(gyms.map(g => g.id));
+    const userGymIds = await collections.users.distinct('gymId', { gymId: { $ne: null, $nin: ['', '__unassigned__'] } });
+    for (const gid of userGymIds) {
+      if (gid && !knownGymIds.has(gid)) {
+        await ensureGym(gid, gid, null, null);
+        gyms.push({ id: gid, name: gid });
+        knownGymIds.add(gid);
+      }
+    }
+    gyms.sort((a, b) => a.name.localeCompare(b.name));
+    json(res, 200, { gyms });
+  },
+
+  'GET /api/admin/gyms': async (req, res) => {
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
+    const gyms = await collections.gyms.find(isAdmin(manager) ? {} : { id: manager.gymId || '__unassigned__' }).sort({ name: 1 }).toArray();
+    json(res, 200, { gyms });
+  },
+
+  'POST /api/admin/gyms': async (req, res) => {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+    const body = await readBody(req);
+    const name = String(body.name || '').trim().slice(0, 80);
+    if (!name) return json(res, 400, { error: 'gym name required' });
+    const id = cleanGymId(body.id) || crypto.randomBytes(8).toString('hex');
+    if (await collections.gyms.findOne({ id })) return json(res, 409, { error: 'gym id already exists' });
+    const gym = { id, name, ownerId: null, createdBy: admin.id, created: new Date().toISOString() };
+    await collections.gyms.insertOne(gym);
+    json(res, 200, { gym });
   },
 
   /* ---------- admin dashboard ---------- */
   'GET /api/admin/users': async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
-    const users = await collections.users.find({}).toArray();
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
+    const users = await collections.users.find(isAdmin(manager) ? {} : { gymId: manager.gymId || '__unassigned__' }).toArray();
     const result = [];
     
     for (const u of users) {
@@ -781,7 +945,7 @@ const routes = {
       
       result.push({
         id: u.id, name: u.name, created: u.created || null,
-        disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null,
+        disabled: !!u.disabled, role: personaOf(u), admin: isAdmin(u), invitedBy: u.invitedBy || null,
         workouts: workouts.length,
         lastWorkout: last ? last.d : null,
         lastSync: S._ts || null,
@@ -794,16 +958,18 @@ const routes = {
   },
 
   'GET /api/admin/user': async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
     const id = new URL(req.url, 'http://x').searchParams.get('id');
     const u = await collections.users.findOne({ id });
     if (!u) return json(res, 404, { error: 'no such user' });
+    if (!isAdmin(manager) && !sameGym(manager, u.gymId)) return json(res, 403, { error: 'outside your gym' });
     
     const state = await collections.userStates.findOne({ userId: u.id });
     const S = state?.data || {};
     
     json(res, 200, {
-      user: { id: u.id, name: u.name, created: u.created || null, disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null },
+      user: { id: u.id, name: u.name, role: personaOf(u), created: u.created || null, disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null },
       unit: S.unit || 'kg',
       lastSync: S._ts || null,
       routines: (S.routines || []).map(r => ({ id: r.id, name: r.name, emoji: r.emoji, count: (r.ex || []).length })),
@@ -813,16 +979,52 @@ const routes = {
   },
 
   'POST /api/admin/user/disable': async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
     const body = await readBody(req);
     const u = await collections.users.findOne({ id: body.id });
     if (!u) return json(res, 404, { error: 'no such user' });
-    if (isAdmin(u)) return json(res, 400, { error: 'cannot disable an admin' });
+    if (!isAdmin(manager) && !sameGym(manager, u.gymId)) return json(res, 403, { error: 'outside your gym' });
+    if (isAdmin(u) || (!isAdmin(manager) && isOwner(u))) return json(res, 400, { error: 'cannot disable this account' });
     
     await collections.users.updateOne({ id: body.id }, { $set: { disabled: !!body.disabled } });
     if (body.disabled) presence.delete(body.id);
     
     json(res, 200, { ok: true, id: body.id, disabled: !!body.disabled });
+  },
+
+  'POST /api/admin/user/role': async (req, res) => {
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
+    const body = await readBody(req);
+    const u = await collections.users.findOne({ id: String(body.id || '') });
+    if (!u) return json(res, 404, { error: 'no such user' });
+    if (!isAdmin(manager) && !sameGym(manager, u.gymId)) return json(res, 403, { error: 'outside your gym' });
+
+    const role = normalizeAssignedRole(body.role);
+    const gymId = cleanGymId(body.gymId || u.gymId || manager.gymId);
+    const trainerId = String(body.trainerId || '').trim() || null;
+    if (!managedRolesFor(manager).includes(role)) return json(res, 403, { error: 'you cannot assign that role' });
+    if (!isAdmin(manager) && !sameGym(manager, gymId)) return json(res, 403, { error: 'owners can only assign inside their gym' });
+    if (isAdmin(u) && !isAdmin(manager)) return json(res, 403, { error: 'cannot change an admin' });
+
+    if (trainerId) {
+      const trainer = await collections.users.findOne({ id: trainerId });
+      if (!trainer || personaOf(trainer) !== 'trainer' || !sameGym(manager, trainer.gymId) && !isAdmin(manager)) return json(res, 400, { error: 'trainer must belong to the same gym' });
+    }
+    const update = { $set: { role, admin: role === 'admin', gymId } };
+    if (role === 'member' && trainerId) update.$set.trainerId = trainerId;
+    else update.$unset = { trainerId: '' };
+    await collections.users.updateOne({ id: u.id }, update);
+    if (gymId) {
+      await ensureGym(gymId, gymId, role === 'owner' ? u.id : null, manager.id);
+    }
+    if (role === 'owner' && gymId) {
+      await collections.gyms.updateOne({ id: gymId }, { $set: { ownerId: u.id } });
+    } else if (u.role === 'owner' && u.gymId && u.gymId !== gymId) {
+      await collections.gyms.updateOne({ id: u.gymId, ownerId: u.id }, { $set: { ownerId: null } });
+    }
+    json(res, 200, { ok: true, user: publicUser({ ...u, role, admin: role === 'admin', gymId, trainerId: role === 'member' ? trainerId : null }) });
   },
 
   'GET /api/admin/invites': async (req, res) => {
@@ -873,6 +1075,8 @@ const routes = {
     const body = await readBody(req);
     const email = String(body.email || '').trim().toLowerCase().slice(0, 100);
     const name = String(body.name || '').trim().slice(0, 40);
+    const requestedRole = normalizePersona(body.requestedRole);
+    const gymId = cleanGymId(body.gymId);
     
     if (!email || !name) return json(res, 400, { error: 'email and name are required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 400, { error: 'invalid email' });
@@ -886,10 +1090,15 @@ const routes = {
       name,
       status: 'pending',
       created: new Date().toISOString(),
-      message: String(body.message || '').slice(0, 500)
+      message: String(body.message || '').slice(0, 500),
+      requestedRole,
+      gymId
     };
     
     await collections.accessRequests.insertOne(request);
+    if (gymId) {
+      await ensureGym(gymId, gymId, null, null);
+    }
     
     // Send email notification to admin
     console.log('[Access Request] New request from:', name, email);
@@ -901,14 +1110,16 @@ const routes = {
   },
 
   'GET /api/admin/access-requests': async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
-    const requests = await collections.accessRequests.find({}).sort({ created: -1 }).toArray();
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
+    const query = isAdmin(manager) ? {} : { gymId: manager.gymId || '__unassigned__', requestedRole: { $in: ['member', 'trainer'] } };
+    const requests = await collections.accessRequests.find(query).sort({ created: -1 }).toArray();
     json(res, 200, { requests });
   },
 
   'POST /api/admin/access-request/approve': async (req, res) => {
-    const admin = await requireAdmin(req, res);
-    if (!admin) return;
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
     const body = await readBody(req);
     const requestId = body.id;
     
@@ -918,6 +1129,12 @@ const routes = {
     if (!request) return json(res, 404, { error: 'request not found' });
     if (request.status !== 'pending') return json(res, 400, { error: 'request already processed' });
     
+    const requestedRole = normalizeAssignedRole(body.role || request.requestedRole || 'member');
+    const gymId = cleanGymId(body.gymId || request.gymId || manager.gymId);
+    if (!isAdmin(manager) && (!sameGym(manager, gymId) || !['member', 'trainer'].includes(requestedRole))) {
+      return json(res, 403, { error: 'owners can only approve member or trainer requests for their gym' });
+    }
+
     // Generate invite code
     let code;
     do { code = crypto.randomBytes(8).toString('hex').toUpperCase(); }
@@ -926,28 +1143,33 @@ const routes = {
     const invite = {
       code,
       note: `For ${request.name} (${request.email})`,
-      createdBy: admin.id,
+      createdBy: manager.id,
       created: new Date().toISOString(),
-      forEmail: request.email
+      forEmail: request.email,
+      assignedRole: requestedRole,
+      gymId
     };
     
     await collections.invites.insertOne(invite);
+    if (gymId) {
+      await ensureGym(gymId, gymId, requestedRole === 'owner' ? null : null, manager.id);
+    }
     await collections.accessRequests.updateOne(
       { _id: new ObjectId(requestId) },
-      { $set: { status: 'approved', approvedBy: admin.id, approvedAt: new Date().toISOString(), inviteCode: code } }
+      { $set: { status: 'approved', approvedBy: manager.id, approvedAt: new Date().toISOString(), inviteCode: code, assignedRole: requestedRole, gymId } }
     );
     
     // Send invite code via email
     console.log('[Access Request] Approving request for:', request.email, '- Code:', code);
-    const emailResult = await sendInviteCodeEmail(request.email, request.name, code);
+    const emailResult = await sendInviteCodeEmail(request.email, request.name, code, requestedRole, gymId);
     console.log('[Access Request] Email result:', JSON.stringify(emailResult));
     
     json(res, 200, { ok: true, code, emailSent: emailResult.success || false, emailError: emailResult.error || null });
   },
 
   'POST /api/admin/access-request/reject': async (req, res) => {
-    const admin = await requireAdmin(req, res);
-    if (!admin) return;
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
     const body = await readBody(req);
     const requestId = body.id;
     
@@ -959,10 +1181,342 @@ const routes = {
     
     await collections.accessRequests.updateOne(
       { _id: new ObjectId(requestId) },
-      { $set: { status: 'rejected', rejectedBy: admin.id, rejectedAt: new Date().toISOString() } }
+      { $set: { status: 'rejected', rejectedBy: manager.id, rejectedAt: new Date().toISOString() } }
     );
     
     json(res, 200, { ok: true });
+  },
+
+  /* ---------- gym management ---------- */
+  'GET /api/management/overview': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const role = personaOf(user);
+    const gymId = cleanGymId(user.gymId);
+    const managed = isAdmin(user) || isOwner(user);
+    let trainerUser = role === 'member' && user.trainerId ? await collections.users.findOne({ id: user.trainerId }) : null;
+    const sameGymQuery = isAdmin(user) ? {} : { gymId: gymId || '__unassigned__' }
+
+    const members = managed || isTrainer(user)
+      ? await collections.users.find(isAdmin(user) ? {} : { ...sameGymQuery, role: { $in: ['member', 'trainer'] } }, { projection: { id: 1, name: 1, role: 1, gymId: 1, trainerId: 1, disabled: 1 } }).sort({ name: 1 }).toArray()
+      : [{ id: user.id, name: user.name, role, gymId, trainerId: user.trainerId || null, disabled: !!user.disabled }];
+    const requests = managed
+      ? await collections.managementRequests.find(isAdmin(user) ? { status: 'pending' } : { status: 'pending', gymId: gymId || '__unassigned__' }).sort({ created: -1 }).limit(50).toArray()
+      : await collections.managementRequests.find({ requesterId: user.id }).sort({ created: -1 }).limit(20).toArray();
+    const scheduleQuery = managed || isTrainer(user) ? sameGymQuery : { memberId: user.id };
+    const assignmentQuery = managed || isTrainer(user) ? sameGymQuery : { memberId: user.id };
+    const feeQuery = managed ? sameGymQuery : { memberId: user.id };
+    const logQuery = managed || isTrainer(user) ? sameGymQuery : { memberId: user.id };
+    const trainingPlanQuery = managed || isTrainer(user) ? sameGymQuery : { memberId: user.id };
+
+    const [schedules, exercises, diets, fees, logs, trainingPlans, gyms] = await Promise.all([
+      collections.schedules.find(scheduleQuery).sort({ startAt: 1, created: -1 }).limit(100).toArray(),
+      collections.customExercises.find(assignmentQuery).sort({ created: -1 }).limit(100).toArray(),
+      collections.diets.find(assignmentQuery).sort({ created: -1 }).limit(100).toArray(),
+      collections.fees.find(feeQuery).sort({ dueDate: 1, created: -1 }).limit(100).toArray(),
+      collections.assignmentLogs.find(logQuery).sort({ created: -1 }).limit(250).toArray(),
+      collections.trainingPlans.find(trainingPlanQuery).sort({ updatedAt: -1, created: -1 }).limit(100).toArray(),
+      collections.gyms.find(isAdmin(user) ? {} : { id: gymId }, { projection: { _id: 0, id: 1, name: 1 } }).toArray()
+    ]);
+    // Older assignments may predate an explicit trainer association. Treat the
+    // latest assigned plan as the member's trainer so it still surfaces in Plan.
+    if (!trainerUser && role === 'member') {
+      const assigned = [...trainingPlans, ...schedules, ...exercises, ...diets].find(item => item.memberId === user.id && item.trainerId);
+      if (assigned) trainerUser = await collections.users.findOne({ id: assigned.trainerId });
+    }
+
+    json(res, 200, {
+      viewer: publicUser(user),
+      trainer: trainerUser ? publicUser(trainerUser) : null,
+      permissions: {
+        canApprove: managed,
+        canAssign: ['admin', 'owner', 'trainer'].includes(role),
+        canManageFees: isAdmin(user) || isOwner(user),
+        canManageRoles: managed,
+        canSubmitFees: role === 'member'
+      },
+      gyms,
+      members: members.map(m => ({ id: m.id, name: m.name, role: personaOf(m), gymId: m.gymId || null, trainerId: m.trainerId || null, disabled: !!m.disabled })),
+      requests,
+      schedules,
+      exercises,
+      diets,
+      fees,
+      logs,
+      trainingPlans,
+      trainingPlan: role === 'member' ? (trainingPlans[0] || null) : null
+    });
+  },
+
+  'POST /api/management/request': async (req, res) => {
+    const requester = await readSession(req);
+    if (!requester) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const requestedRole = normalizePersona(body.requestedRole || body.role);
+    const gymId = cleanGymId(body.gymId || requester.gymId);
+    if (!gymId) return json(res, 400, { error: 'gym id required' });
+    if (requestedRole === 'owner') return json(res, 403, { error: 'owner access must be assigned by an admin' });
+    const existing = await collections.managementRequests.findOne({ requesterId: requester.id, status: 'pending' });
+    if (existing) return json(res, 200, { request: existing, message: 'request already pending' });
+    const request = {
+      type: requester.gymId ? 'role-change' : 'join-gym',
+      requesterId: requester.id,
+      requesterName: requester.name,
+      gymId,
+      requestedRole,
+      message: String(body.message || '').trim().slice(0, 500),
+      status: 'pending',
+      created: new Date().toISOString()
+    };
+    const result = await collections.managementRequests.insertOne(request);
+    if (gymId) {
+      await ensureGym(gymId, gymId, null, requester.id);
+    }
+    json(res, 200, { request: { ...request, id: String(result.insertedId) } });
+  },
+
+  'POST /api/management/request/review': async (req, res) => {
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
+    const body = await readBody(req);
+    let request;
+    try { request = await collections.managementRequests.findOne({ _id: new ObjectId(String(body.id || '')) }); }
+    catch { request = null; }
+    if (!request) return json(res, 404, { error: 'request not found' });
+    if (request.status !== 'pending') return json(res, 400, { error: 'request already processed' });
+    if (!isAdmin(manager) && !sameGym(manager, request.gymId)) return json(res, 403, { error: 'outside your gym' });
+    const approved = body.action === 'approve';
+    const requestedRole = normalizeAssignedRole(request.requestedRole);
+    if (!isAdmin(manager) && !['member', 'trainer'].includes(requestedRole)) return json(res, 403, { error: 'owners can only approve member or trainer requests' });
+
+    const target = await collections.users.findOne({ id: request.requesterId });
+    if (!target) return json(res, 404, { error: 'requester no longer exists' });
+    if (approved) {
+      await collections.users.updateOne({ id: target.id }, { $set: { role: requestedRole, gymId: request.gymId } });
+      await ensureGym(request.gymId, request.gymId, requestedRole === 'owner' ? target.id : null, manager.id);
+    }
+    await collections.managementRequests.updateOne(
+      { _id: request._id },
+      { $set: { status: approved ? 'approved' : 'rejected', reviewedBy: manager.id, reviewedAt: new Date().toISOString() } }
+    );
+    json(res, 200, { ok: true, status: approved ? 'approved' : 'rejected' });
+  },
+
+  'POST /api/management/training-plans': async (req, res) => {
+    const coach = await requireCoach(req, res);
+    if (!coach) return;
+    const body = await readBody(req);
+    const member = await collections.users.findOne({ id: String(body.memberId || '') });
+    if (!member || personaOf(member) !== 'member') return json(res, 400, { error: 'a gym member is required' });
+    if (!canCoachGym(coach, member.gymId)) return json(res, 403, { error: 'outside your gym' });
+    if (isTrainer(coach) && member.trainerId && member.trainerId !== coach.id) {
+      return json(res, 403, { error: 'member is assigned to another trainer' });
+    }
+
+    const sourceRoutines = Array.isArray(body.routines) ? body.routines.slice(0, 40) : [];
+    const routines = sourceRoutines.map((routine, index) => {
+      const id = String(routine?.id || `routine-${index + 1}`).trim().slice(0, 120);
+      const name = String(routine?.name || '').trim().slice(0, 100);
+      const exercises = Array.isArray(routine?.ex) ? routine.ex.slice(0, 80).map(exercise => ({
+        ...exercise,
+        id: String(exercise?.id || '').trim().slice(0, 120),
+        sets: Math.max(1, Math.min(20, +(exercise?.sets || 3) || 3)),
+        reps: Math.max(1, Math.min(100, +(exercise?.reps || 10) || 10))
+      })).filter(exercise => exercise.id) : [];
+      return {
+        id: id || `routine-${index + 1}`,
+        name: name || `Routine ${index + 1}`,
+        emoji: String(routine?.emoji || 'dumbbell').slice(0, 40),
+        prog: String(routine?.prog || 'linear').slice(0, 40),
+        ex: exercises
+      };
+    });
+    const routineIds = new Set(routines.map(routine => routine.id));
+    const sourceWeek = body.week && typeof body.week === 'object' ? body.week : {};
+    const week = {};
+    for (const day of [0, 1, 2, 3, 4, 5, 6]) {
+      const value = String(sourceWeek[day] || '').trim();
+      week[day] = value && routineIds.has(value) ? value : '';
+    }
+    if (!routines.length || !Object.values(week).some(Boolean)) {
+      return json(res, 400, { error: 'at least one routine and one training day are required' });
+    }
+
+    // A trainer becomes the member's trainer the first time they assign a plan.
+    // Owners/admins can assign for a member without replacing an existing trainer.
+    if (!member.trainerId && isTrainer(coach)) {
+      await collections.users.updateOne({ id: member.id }, { $set: { trainerId: coach.id } });
+    }
+    const trainerId = member.trainerId || (isTrainer(coach) ? coach.id : null);
+    const now = new Date().toISOString();
+    const existing = await collections.trainingPlans.findOne({ memberId: member.id, gymId: member.gymId });
+    const plan = {
+      id: existing?.id || crypto.randomBytes(12).toString('base64url'),
+      gymId: member.gymId,
+      memberId: member.id,
+      trainerId,
+      assignedBy: coach.id,
+      routines,
+      week,
+      created: existing?.created || now,
+      updatedAt: now
+    };
+    await collections.trainingPlans.updateOne(
+      { memberId: member.id, gymId: member.gymId },
+      { $set: plan },
+      { upsert: true }
+    );
+    json(res, 200, { trainingPlan: plan });
+  },
+
+  'POST /api/management/schedules': async (req, res) => {
+    const coach = await requireCoach(req, res);
+    if (!coach) return;
+    const body = await readBody(req);
+    const member = await collections.users.findOne({ id: String(body.memberId || '') });
+    if (!member || personaOf(member) !== 'member') return json(res, 400, { error: 'a gym member is required' });
+    if (!canCoachGym(coach, member.gymId)) return json(res, 403, { error: 'outside your gym' });
+    if (!member.trainerId && (isTrainer(coach) || isOwner(coach))) await collections.users.updateOne({ id: member.id }, { $set: { trainerId: coach.id } });
+    const title = String(body.title || '').trim().slice(0, 100);
+    const startAt = String(body.startAt || '').trim();
+    if (!title || !startAt) return json(res, 400, { error: 'title and start time are required' });
+    const schedule = {
+      id: crypto.randomBytes(12).toString('base64url'), gymId: member.gymId, memberId: member.id,
+      trainerId: coach.id, title, startAt, endAt: String(body.endAt || '').trim(),
+      notes: String(body.notes || '').trim().slice(0, 500), createdBy: coach.id, created: new Date().toISOString()
+    };
+    await collections.schedules.insertOne(schedule);
+    json(res, 200, { schedule });
+  },
+
+  'POST /api/management/exercises': async (req, res) => {
+    const coach = await requireCoach(req, res);
+    if (!coach) return;
+    const body = await readBody(req);
+    const member = await collections.users.findOne({ id: String(body.memberId || '') });
+    if (!member || personaOf(member) !== 'member') return json(res, 400, { error: 'a gym member is required' });
+    if (!canCoachGym(coach, member.gymId)) return json(res, 403, { error: 'outside your gym' });
+    if (!member.trainerId && (isTrainer(coach) || isOwner(coach))) await collections.users.updateOne({ id: member.id }, { $set: { trainerId: coach.id } });
+    const exerciseId = String(body.exerciseId || '').trim().slice(0, 120) || null;
+    const name = String(body.name || '').trim().slice(0, 100);
+    if (!name) return json(res, 400, { error: 'exercise name required' });
+    const exercise = {
+      id: crypto.randomBytes(12).toString('base64url'), gymId: member.gymId, memberId: member.id,
+      trainerId: coach.id, exerciseId, name, scheduleId: String(body.scheduleId || '').trim() || null, instructions: String(body.instructions || '').trim().slice(0, 1000),
+      equipment: String(body.equipment || '').trim().slice(0, 120),
+      targetSets: Math.max(1, Math.min(20, +(body.targetSets || 3) || 3)),
+      targetReps: Math.max(1, Math.min(100, +(body.targetReps || 10) || 10)),
+      createdBy: coach.id, created: new Date().toISOString()
+    };
+    await collections.customExercises.insertOne(exercise);
+    json(res, 200, { exercise });
+  },
+
+  'POST /api/management/diets': async (req, res) => {
+    const coach = await requireCoach(req, res);
+    if (!coach) return;
+    const body = await readBody(req);
+    const member = await collections.users.findOne({ id: String(body.memberId || '') });
+    if (!member || personaOf(member) !== 'member') return json(res, 400, { error: 'a gym member is required' });
+    if (!canCoachGym(coach, member.gymId)) return json(res, 403, { error: 'outside your gym' });
+    if (!member.trainerId && (isTrainer(coach) || isOwner(coach))) await collections.users.updateOne({ id: member.id }, { $set: { trainerId: coach.id } });
+    const title = String(body.title || '').trim().slice(0, 100);
+    if (!title) return json(res, 400, { error: 'diet title required' });
+    const foods = Array.isArray(body.foods) ? body.foods.slice(0, 30).map((food, index) => ({
+      id: String(food.id || crypto.randomBytes(6).toString('hex')).slice(0, 80),
+      name: String(food.name || '').trim().slice(0, 120),
+      time: String(food.time || '').trim().slice(0, 20),
+      serving: String(food.serving || '').trim().slice(0, 120),
+      order: index
+    })).filter(food => food.name) : [];
+    const diet = {
+      id: crypto.randomBytes(12).toString('base64url'), gymId: member.gymId, memberId: member.id,
+      trainerId: coach.id, title, calories: Number.isFinite(+body.calories) ? Math.max(0, +body.calories) : null,
+      meals: String(body.meals || '').trim().slice(0, 2000), foods, notes: String(body.notes || '').trim().slice(0, 500),
+      createdBy: coach.id, created: new Date().toISOString()
+    };
+    await collections.diets.insertOne(diet);
+    json(res, 200, { diet });
+  },
+
+  'POST /api/management/fees': async (req, res) => {
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
+    const body = await readBody(req);
+    const member = await collections.users.findOne({ id: String(body.memberId || '') });
+    if (!member || personaOf(member) !== 'member') return json(res, 400, { error: 'a gym member is required' });
+    if (!canManageGym(manager, member.gymId)) return json(res, 403, { error: 'outside your gym' });
+    const amount = Number(body.amount);
+    const dueDate = String(body.dueDate || '').trim();
+    if (!Number.isFinite(amount) || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return json(res, 400, { error: 'valid amount and due date required' });
+    const fee = {
+      id: crypto.randomBytes(12).toString('base64url'), gymId: member.gymId, memberId: member.id,
+      amount: Math.round(amount * 100) / 100, currency: String(body.currency || 'USD').slice(0, 8).toUpperCase(),
+      dueDate, status: 'due', note: String(body.note || '').trim().slice(0, 300), createdBy: manager.id, created: new Date().toISOString()
+    };
+    await collections.fees.insertOne(fee);
+    json(res, 200, { fee });
+  },
+
+  'POST /api/management/fees/submit': async (req, res) => {
+    const member = await readSession(req);
+    if (!member) return json(res, 401, { error: 'not signed in' });
+    if (personaOf(member) !== 'member') return json(res, 403, { error: 'members submit fees' });
+    const body = await readBody(req);
+    const fee = await collections.fees.findOne({ id: String(body.id || ''), memberId: member.id });
+    if (!fee) return json(res, 404, { error: 'fee not found' });
+    if (!['due', 'overdue', 'rejected'].includes(fee.status)) return json(res, 400, { error: 'fee is already submitted' });
+    await collections.fees.updateOne({ id: fee.id }, { $set: { status: 'submitted', submittedAt: new Date().toISOString(), submissionNote: String(body.note || '').trim().slice(0, 300) } });
+    json(res, 200, { ok: true, status: 'submitted' });
+  },
+
+  'POST /api/management/fees/review': async (req, res) => {
+    const manager = await requireOrgManager(req, res);
+    if (!manager) return;
+    const body = await readBody(req);
+    const fee = await collections.fees.findOne({ id: String(body.id || '') });
+    if (!fee) return json(res, 404, { error: 'fee not found' });
+    if (!canManageGym(manager, fee.gymId)) return json(res, 403, { error: 'outside your gym' });
+    if (!['approved', 'rejected'].includes(body.status)) return json(res, 400, { error: 'status must be approved or rejected' });
+    await collections.fees.updateOne({ id: fee.id }, { $set: { status: body.status, reviewedBy: manager.id, reviewedAt: new Date().toISOString() } });
+    json(res, 200, { ok: true, status: body.status });
+  },
+
+  'POST /api/management/assignments/log': async (req, res) => {
+    const actor = await readSession(req);
+    if (!actor) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const type = String(body.assignmentType || '').trim();
+    const collection = type === 'schedule' ? collections.schedules : type === 'exercise' ? collections.customExercises : type === 'diet' ? collections.diets : null;
+    if (!collection) return json(res, 400, { error: 'assignmentType must be schedule, exercise, or diet' });
+    const assignment = await collection.findOne({ id: String(body.assignmentId || '') });
+    if (!assignment) return json(res, 404, { error: 'assignment not found' });
+    const canLog = assignment.memberId === actor.id || canCoachGym(actor, assignment.gymId);
+    if (!canLog) return json(res, 403, { error: 'you cannot log this assignment' });
+    const status = String(body.status || '').trim();
+    if (!['hit', 'missed', 'partial', 'logged'].includes(status)) return json(res, 400, { error: 'invalid assignment status' });
+    const date = String(body.date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    const itemId = String(body.itemId || '').trim() || null;
+    if (type === 'diet' && itemId && !(assignment.foods || []).some(food => food.id === itemId)) return json(res, 400, { error: 'diet item not found' });
+    const log = {
+      assignmentId: assignment.id,
+      itemId,
+      assignmentType: type,
+      gymId: assignment.gymId || null,
+      memberId: assignment.memberId,
+      loggedBy: actor.id,
+      status,
+      date,
+      note: String(body.note || '').trim().slice(0, 500),
+      metric: body.metric == null ? null : String(body.metric).slice(0, 120),
+      created: new Date().toISOString()
+    };
+    await collections.assignmentLogs.updateOne(
+      { assignmentId: assignment.id, memberId: assignment.memberId, date, itemId },
+      { $set: log },
+      { upsert: true }
+    );
+    json(res, 200, { ok: true, log });
   },
 
   /* ---------- social media: user profiles ---------- */

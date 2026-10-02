@@ -12,6 +12,8 @@
 //   · round caps + round joins, stroke width from --icon-stroke (1.7 default)
 //   · geometry snapped to .5 so it lands on pixel edges at 24px
 
+import type { CSSProperties, SVGProps } from 'react'
+
 const P = {
   /* ---- navigation ---- */
   house: <path d="M3.5 10.7 12 3.8l8.5 6.9M5.9 9.4V19a1.4 1.4 0 0 0 1.4 1.4h9.4A1.4 1.4 0 0 0 18.1 19V9.4" />,
@@ -134,7 +136,14 @@ export const ICON_NAMES = Object.keys(P)
  * <Icon name="flame" />           — inherits font-size via `1em` sizing
  * <Icon name="flame" size={28} /> — explicit pixel size
  */
-export default function Icon({ name, size, className = '', style, ...rest }) {
+type IconProps = Omit<SVGProps<SVGSVGElement>, 'name'> & {
+  name: string
+  size?: number
+  className?: string
+  style?: CSSProperties
+}
+
+export default function Icon({ name, size, className = '', style, ...rest }: IconProps) {
   const d = P[name]
   if (!d) return null
   const s = size ? { width: size, height: size } : null

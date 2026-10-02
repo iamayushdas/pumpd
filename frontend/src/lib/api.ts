@@ -52,8 +52,11 @@ function credToJSON(cred: any) {
   return out
 }
 
-export async function passkeyRegister(name: string, code: string): Promise<any> {
-  const { cid, options } = await api('/api/register/options', { method: 'POST', body: JSON.stringify({ name, code: code || '' }) })
+export async function passkeyRegister(name: string, code: string, role = 'member', gymId?: string | null): Promise<any> {
+  const { cid, options } = await api('/api/register/options', {
+    method: 'POST',
+    body: JSON.stringify({ name, code: code || '', role, gymId: gymId || undefined })
+  })
   const cred = await navigator.credentials.create({ publicKey: toCreationOptions(options) })
   const res = await api('/api/register/verify', { method: 'POST', body: JSON.stringify({ cid, credential: credToJSON(cred) }) })
   return res.user
@@ -75,10 +78,10 @@ export async function adminLogin(secretOrUser: string, password?: string): Promi
   return res.user
 }
 
-export async function requestAccess(email: string, name: string, message: string): Promise<any> {
+export async function requestAccess(email: string, name: string, message: string, requestedRole = 'member', gymId?: string | null): Promise<any> {
   return api('/api/access-request', {
     method: 'POST',
-    body: JSON.stringify({ email, name, message })
+    body: JSON.stringify({ email, name, message, requestedRole, gymId: gymId || null })
   })
 }
 
@@ -86,10 +89,10 @@ export async function getAccessRequests(): Promise<any> {
   return api('/api/admin/access-requests')
 }
 
-export async function approveAccessRequest(id: string): Promise<any> {
+export async function approveAccessRequest(id: string, role?: string, gymId?: string | null): Promise<any> {
   return api('/api/admin/access-request/approve', {
     method: 'POST',
-    body: JSON.stringify({ id })
+    body: JSON.stringify({ id, role, gymId: gymId || null })
   })
 }
 
@@ -99,3 +102,16 @@ export async function rejectAccessRequest(id: string): Promise<any> {
     body: JSON.stringify({ id })
   })
 }
+
+export const getManagementOverview = (): Promise<any> => api('/api/management/overview')
+export const createManagementRequest = (payload: { requestedRole: string; gymId: string; message?: string }): Promise<any> => api('/api/management/request', { method: 'POST', body: JSON.stringify(payload) })
+export const reviewManagementRequest = (id: string, action: 'approve' | 'reject'): Promise<any> => api('/api/management/request/review', { method: 'POST', body: JSON.stringify({ id, action }) })
+export const createTrainingPlan = (payload: Record<string, unknown>): Promise<any> => api('/api/management/training-plans', { method: 'POST', body: JSON.stringify(payload) })
+export const createSchedule = (payload: Record<string, unknown>): Promise<any> => api('/api/management/schedules', { method: 'POST', body: JSON.stringify(payload) })
+export const createCustomExercise = (payload: Record<string, unknown>): Promise<any> => api('/api/management/exercises', { method: 'POST', body: JSON.stringify(payload) })
+export const createDiet = (payload: Record<string, unknown>): Promise<any> => api('/api/management/diets', { method: 'POST', body: JSON.stringify(payload) })
+export const createFee = (payload: Record<string, unknown>): Promise<any> => api('/api/management/fees', { method: 'POST', body: JSON.stringify(payload) })
+export const submitFee = (id: string, note?: string): Promise<any> => api('/api/management/fees/submit', { method: 'POST', body: JSON.stringify({ id, note }) })
+export const reviewFee = (id: string, status: 'approved' | 'rejected'): Promise<any> => api('/api/management/fees/review', { method: 'POST', body: JSON.stringify({ id, status }) })
+export const logAssignment = (assignmentType: 'schedule' | 'exercise' | 'diet', assignmentId: string, status: 'hit' | 'missed' | 'partial' | 'logged', note?: string, metric?: string, itemId?: string): Promise<any> => api('/api/management/assignments/log', { method: 'POST', body: JSON.stringify({ assignmentType, assignmentId, status, note, metric, itemId }) })
+export const listGyms = (): Promise<any> => api('/api/gyms')

@@ -1,11 +1,13 @@
 import { useStore, hasData } from '../store/useStore'
 import { useUI } from '../store/useUI'
-import { webauthnOK, passkeyLogin, passkeyRegister, adminLogin, requestAccess, api, BIO, VAULT } from '../lib/api'
+import { webauthnOK, passkeyLogin, passkeyRegister, adminLogin, requestAccess, listGyms, api, BIO, VAULT } from '../lib/api'
 import { t } from '../lib/i18n'
 import { DEMO, REPO } from '../lib/demo'
 import { useState, useRef, useEffect } from 'react'
 import Icon from '../components/Icon'
 import { Button } from '../components/ui'
+import PersonaPicker from '../components/PersonaPicker'
+import type { PersonaRole } from '../types/store/user'
 
 function PasskeyInfoSheet({ close }) {
   return (
@@ -34,7 +36,10 @@ export default function Login() {
   const [tab, setTab] = useState('login') // 'login' | 'register' | 'request'
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [persona, setPersona] = useState<Exclude<PersonaRole, 'admin'>>('member')
   const [email, setEmail] = useState('')
+  const [gymId, setGymId] = useState('')
+  const [gyms, setGyms] = useState<any[]>([])
   const [message, setMessage] = useState('')
   const [requestSubmitted, setRequestSubmitted] = useState(false)
   const [inviteOnly, setInviteOnly] = useState(false)
@@ -66,6 +71,7 @@ export default function Login() {
         setServerOk(true)
       })
       .catch(() => setServerOk(false))
+    listGyms().then(r => setGyms(r.gyms || [])).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -80,7 +86,7 @@ export default function Login() {
       const triggerAutoRegister = async () => {
         setLoading(true)
         try {
-          const u = await passkeyRegister(name, code)
+          const u = await passkeyRegister(name, code, persona, gymId.trim() || undefined)
           setUser(u)
           if (hasData(useStore.getState().S)) {
             await pushState()
@@ -103,7 +109,7 @@ export default function Login() {
       const timer = setTimeout(triggerAutoRegister, 500)
       return () => clearTimeout(timer)
     }
-  }, [isAutoFilled, name, code, loading])
+  }, [isAutoFilled, name, code, persona, loading])
 
   const handleSignIn = async () => {
     if (loading) return
@@ -158,7 +164,7 @@ export default function Login() {
     }
 
     try {
-      const u = await passkeyRegister(n, code.trim())
+      const u = await passkeyRegister(n, code.trim(), persona, gymId.trim() || undefined)
       setUser(u)
       if (hasData(useStore.getState().S)) {
         await pushState()
@@ -189,7 +195,7 @@ export default function Login() {
 
     setLoading(true)
     try {
-      await requestAccess(em, n, message.trim())
+      await requestAccess(em, n, message.trim(), persona, gymId.trim() || undefined)
       setRequestSubmitted(true)
       useUI.getState().toast(t('Access request submitted'))
     } catch (e) {
@@ -342,6 +348,30 @@ export default function Login() {
                   />
                 </div>
 
+                <PersonaPicker value={persona} onChange={setPersona} />
+
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
+                    {t('GYM ID (OPTIONAL)')}
+                  </label>
+                  <input
+                    list="available-gyms-reg"
+                    className="input field"
+                    placeholder={t('e.g. downtown or iron-vault')}
+                    maxLength={80}
+                    value={gymId}
+                    onChange={e => setGymId(e.target.value)}
+                    style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15 }}
+                  />
+                  {gyms.length > 0 && (
+                    <datalist id="available-gyms-reg">
+                      {gyms.map(g => (
+                        <option key={g.id} value={g.id}>{g.name} ({g.id})</option>
+                      ))}
+                    </datalist>
+                  )}
+                </div>
+
                 {inviteOnly && (
                   <div style={{ marginBottom: 12 }}>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
@@ -424,6 +454,30 @@ export default function Login() {
                         onChange={e => setEmail(e.target.value)}
                         style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15 }}
                       />
+                    </div>
+
+                    <PersonaPicker value={persona} onChange={setPersona} />
+
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--label-2)', marginBottom: 6, letterSpacing: '.03em' }}>
+                        {t('GYM ID (OPTIONAL)')}
+                      </label>
+                      <input
+                        list="available-gyms-req"
+                        className="input field"
+                        placeholder={t('e.g. downtown or iron-vault')}
+                        maxLength={80}
+                        value={gymId}
+                        onChange={e => setGymId(e.target.value)}
+                        style={{ width: '100%', borderRadius: 10, padding: '10px 12px', fontSize: 15 }}
+                      />
+                      {gyms.length > 0 && (
+                        <datalist id="available-gyms-req">
+                          {gyms.map(g => (
+                            <option key={g.id} value={g.id}>{g.name} ({g.id})</option>
+                          ))}
+                        </datalist>
+                      )}
                     </div>
 
                     <div style={{ marginBottom: 12 }}>

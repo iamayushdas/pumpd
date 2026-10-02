@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import {
@@ -6,28 +6,39 @@ import {
   effectiveRoutineId,
   streakWeeks,
   lastBW,
-  setsDoneActive
+  setsDoneActive,
 } from '../lib/history'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format'
 import { t, dateLocale } from '../lib/i18n'
+import { getManagementOverview } from '../lib/api'
 import {
   bwSheet,
   goalSheet,
   dayOverrideSheet,
   calendarSheet,
   startFlow,
+  startAssignedRoutineFlow,
+  startAssignedWorkoutFlow,
   loadStarterPlan,
-  bwDeltaColor
+  bwDeltaColor,
 } from '../sheets'
 import LineChart from '../components/LineChart'
 import Icon from '../components/Icon'
-import { Button } from '../components/ui'
+import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
+import { Card } from '../components/ui/card'
+import { Progress } from '../components/ui/progress'
+import { cn } from '../lib/utils'
 import { glyphOf } from '../lib/glyphs'
 
-function getGreeting(name) {
+function getGreeting() {
   const hour = new Date().getHours()
-  const part = hour < 12 ? t('Good morning') : hour < 17 ? t('Good afternoon') : t('Good evening')
-  return name ? `${part}, ${name}` : part
+  return hour < 12 ? t('Good morning') : hour < 17 ? t('Good afternoon') : t('Good evening')
+}
+
+function prettySessionTime(value) {
+  if (!value) return 'Today'
+  return new Date(value).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
 export default function Home() {
@@ -35,39 +46,50 @@ export default function Home() {
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
   const [weekOffset, setWeekOffset] = useState(0)
+  const [managementData, setManagementData] = useState(null)
+
+  useEffect(() => {
+    if (!user?.id) return
+    getManagementOverview().then(setManagementData).catch(() => {})
+  }, [user?.id])
 
   const today = new Date()
-  const routine = effectiveRoutine(S, todayISO())
-  const todayOvr = S.dayPlan[todayISO()] !== undefined
+  const todayKey = todayISO()
+  const routine = effectiveRoutine(S, todayKey)
+  const todayOvr = S.dayPlan[todayKey] !== undefined
+  const trainerAssigned = !!managementData?.trainer || !!managementData?.trainingPlan
+  const trainerPlan = managementData?.trainingPlan
+  const trainerRoutine = trainerPlan
+    ? (trainerPlan.routines || []).find(routine => routine.id === trainerPlan.week?.[today.getDay()])
+    : null
+  const trainerSchedule = trainerAssigned ? (managementData?.schedules || []).find(schedule => String(schedule.startAt || '').slice(0, 10) === todayKey) : null
+  const trainerExercises = trainerRoutine?.ex || (trainerSchedule
+    ? (managementData?.exercises || []).filter(exercise => !exercise.scheduleId || exercise.scheduleId === trainerSchedule.id)
+    : [])
+  const hasTrainerWorkout = !!(trainerRoutine || trainerSchedule)
   const bw = lastBW(S)
   const prevBW = S.bodyweight.length > 1 ? S.bodyweight[S.bodyweight.length - 2] : null
   const delta = bw && prevBW ? bw.w - prevBW.w : null
+  const doneDays = new Set(S.workouts.map(w => w.d))
 
-  // 7-day week strip
   const monday = new Date(today)
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) + weekOffset * 7)
-  const doneDays = new Set(S.workouts.map(w => w.d))
-  const strip = []
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    const iso = isoOf(d)
-    const eff = effectiveRoutineId(S, iso)
-    const ovr = S.dayPlan[iso] !== undefined
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(monday)
+    date.setDate(monday.getDate() + i)
+    const iso = isoOf(date)
+    const effectiveId = effectiveRoutineId(S, iso)
+    const override = S.dayPlan[iso] !== undefined
     const done = doneDays.has(iso)
-    const dot = done ? ' done' : ovr && eff ? ' ovr' : eff ? ' plan' : ''
-    strip.push(
-      <div
-        key={i}
-        className={'wday' + (iso === todayISO() ? ' today' : '')}
-        onClick={() => dayOverrideSheet(iso)}
-      >
-        <div className="lbl">{t(DAYS[d.getDay()])}</div>
-        <div className="num">{d.getDate()}</div>
-        <div className={'dot' + dot} />
-      </div>
-    )
-  }
+    return {
+      date,
+      iso,
+      done,
+      planned: !!effectiveId,
+      override,
+      today: iso === todayKey,
+    }
+  })
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
   const wkLabel =
@@ -75,16 +97,15 @@ export default function Home() {
       ? t('This week')
       : `${monday.getDate()} ${monday.toLocaleDateString(dateLocale(), { month: 'short' })} – ${sunday.getDate()} ${sunday.toLocaleDateString(dateLocale(), { month: 'short' })}`
 
-  const wThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayISO())).length
+  const wThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayKey)).length
   const plannedPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
   const streak = streakWeeks(S)
   const bwPoints = S.bodyweight.slice(-30).map(b => ({
-    t: b.t || new Date(b.d).getTime(),
+    t: new Date(b.d).getTime(),
     y: b.w,
-    d: b.d
+    d: b.d,
   }))
 
-  // Goal progress calculation
   let goalPct = 0
   if (S.targetW && bw && S.bodyweight.length > 0) {
     const firstW = S.bodyweight[0].w
@@ -97,318 +118,251 @@ export default function Home() {
 
   const onTodayAction = () => {
     if (S.active) nav('/workout')
+    else if (trainerRoutine) startAssignedRoutineFlow(trainerRoutine)
+    else if (trainerSchedule) startAssignedWorkoutFlow(trainerExercises, trainerSchedule)
     else if (routine) startFlow(routine.id)
-    else dayOverrideSheet(todayISO())
+    else dayOverrideSheet(todayKey)
   }
 
   const activeSetsDone = S.active ? setsDoneActive(S.active) : 0
   const activeSetsTotal = S.active
-    ? S.active.entries.reduce((acc, e) => acc + (e.sets ? e.sets.length : 0), 0)
+    ? S.active.entries.reduce((acc, entry) => acc + (entry.sets ? entry.sets.length : 0), 0)
     : 0
+  const displayName = user?.name || t('athlete')
 
   return (
-    <div className="narrow">
-      {/* Header */}
-      <div className="hdr" style={{ marginBottom: 14 }}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 750 }}>
-            {user?.name ? (
-              <>
-                {getGreeting(null)}, <span style={{ color: 'var(--acc)' }}>{user.name}</span>
-              </>
-            ) : (
-              getGreeting(user?.name)
-            )}
+    <main className="mx-auto w-full max-w-3xl space-y-5 sm:space-y-6">
+      <header className="space-y-3 pt-1 sm:space-y-4 sm:pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--label-3)]">{t('Your daily momentum')}</p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => nav('/feed')} aria-label={t('Feed')}>
+              <Icon name="users" className="text-[18px]" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={() => nav('/settings')} aria-label={t('Settings')}>
+              <Icon name="gear" className="text-[18px]" />
+            </Button>
+          </div>
+        </div>
+        <div className="min-w-0">
+          <h1 className="max-w-[32rem] break-words text-[clamp(1.8rem,8vw,2.65rem)] font-bold leading-[1.02] tracking-[-0.06em] text-[var(--label)]">
+            {getGreeting()}, <span className="text-[var(--acc)]">{displayName}</span>
           </h1>
-          <div className="sub" style={{ fontSize: 13.5, marginTop: 2 }}>
-            {today.toLocaleDateString(dateLocale(), {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long'
-            })}
-          </div>
+          <p className="mt-1.5 text-xs text-[var(--label-2)]">
+            {today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
         </div>
-        <div className="row" style={{ gap: 8 }}>
-          <button
-            className="iconbtn"
-            onClick={() => nav('/feed')}
-            aria-label={t('Feed')}
-            title={t('Feed')}
-          >
-            <Icon name="users" />
-          </button>
-          <button
-            className="iconbtn"
-            onClick={() => nav('/settings')}
-            aria-label={t('Settings')}
-          >
-            <Icon name="gear" />
-          </button>
-        </div>
-      </div>
+      </header>
 
-      {/* Top 3 Stat Highlights */}
-      <div className="home-stats-row">
-        <div
-          className="home-stat-card"
-          onClick={() => calendarSheet()}
-          style={{ cursor: 'pointer' }}
+      <section className="grid grid-cols-3 gap-2.5 sm:gap-3" aria-label={t('Your progress')}>
+        <button
+          type="button"
+          onClick={() => calendarSheet(todayKey)}
+          className="group min-h-[112px] rounded-[24px] border border-white/[0.07] bg-[var(--surface)] p-3 text-left shadow-[0_14px_40px_-30px_rgba(0,0,0,0.9)] transition-transform duration-200 active:scale-[0.97] sm:p-4"
         >
-          <span className="home-stat-icon" style={{ color: 'var(--orange)' }}>
-            <Icon name="flame" />
+          <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--orange)_15%,transparent)] text-[var(--orange)]">
+            <Icon name="flame" className="text-[17px]" />
           </span>
-          <div className="home-stat-val">{streak}</div>
-          <div className="home-stat-lbl">{t('Week Streak')}</div>
-        </div>
-
-        <div
-          className="home-stat-card"
-          onClick={() => calendarSheet()}
-          style={{ cursor: 'pointer' }}
+          <span className="block text-xl font-bold tracking-[-0.05em] text-[var(--label)]">{streak}</span>
+          <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--label-3)]">{t('Week Streak')}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => calendarSheet(todayKey)}
+          className="group min-h-[112px] rounded-[24px] border border-white/[0.07] bg-[var(--surface)] p-3 text-left shadow-[0_14px_40px_-30px_rgba(0,0,0,0.9)] transition-transform duration-200 active:scale-[0.97] sm:p-4"
         >
-          <span className="home-stat-icon" style={{ color: 'var(--acc)' }}>
-            <Icon name="dumbbell" />
+          <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--acc-soft)] text-[var(--acc)]">
+            <Icon name="dumbbell" className="text-[17px]" />
           </span>
-          <div className="home-stat-val">
-            {wThisWeek}
-            {plannedPerWeek ? `/${plannedPerWeek}` : ''}
-          </div>
-          <div className="home-stat-lbl">{t('This Week')}</div>
-        </div>
-
-        <div
-          className="home-stat-card"
+          <span className="block text-xl font-bold tracking-[-0.05em] text-[var(--label)]">
+            {wThisWeek}<span className="text-sm font-medium text-[var(--label-3)]">{plannedPerWeek ? `/${plannedPerWeek}` : ''}</span>
+          </span>
+          <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--label-3)]">{t('This Week')}</span>
+        </button>
+        <button
+          type="button"
           onClick={() => bwSheet()}
-          style={{ cursor: 'pointer' }}
+          className="group min-h-[112px] rounded-[24px] border border-white/[0.07] bg-[var(--surface)] p-3 text-left shadow-[0_14px_40px_-30px_rgba(0,0,0,0.9)] transition-transform duration-200 active:scale-[0.97] sm:p-4"
         >
-          <span className="home-stat-icon" style={{ color: 'var(--teal)' }}>
-            <Icon name="chartLine" />
+          <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--teal)_15%,transparent)] text-[var(--teal)]">
+            <Icon name="chartLine" className="text-[17px]" />
           </span>
-          <div className="home-stat-val">
-            {bw ? `${fmtNum(bw.w)}` : '—'}
-          </div>
-          <div className="home-stat-lbl">{S.unit || 'kg'}</div>
-        </div>
-      </div>
+          <span className="block text-xl font-bold tracking-[-0.05em] text-[var(--label)]">{bw ? fmtNum(bw.w) : '—'}</span>
+          <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--label-3)]">{S.unit || 'kg'}</span>
+        </button>
+      </section>
 
-      {/* Featured Workout Hero Card */}
-      <div className={`home-hero ${S.active ? 'active-workout' : ''}`}>
-        <div className="home-hero-glow" />
-
-        <div className="home-hero-head">
-          <div className="home-hero-badge">
-            {S.active ? (
-              <>
-                <span className="live-pulse-dot" />
-                <span>{t('Workout in Progress')}</span>
-              </>
-            ) : routine ? (
-              <>
-                <Icon name={glyphOf(routine.emoji)} />
-                <span>{t("Today's Session")}</span>
-              </>
-            ) : (
-              <>
-                <Icon name="moon" />
-                <span>{t('Rest & Recovery')}</span>
-              </>
-            )}
-          </div>
-
-          {todayOvr && routine && (
-            <span className="dim small" style={{ fontSize: 11.5 }}>
-              {t('Rescheduled')}
-            </span>
-          )}
-        </div>
-
-        <h2 className="home-hero-title">
-          {S.active
-            ? S.active.name
-            : routine
-            ? routine.name
-            : t('Rest Day')}
-        </h2>
-
-        <p className="home-hero-desc">
-          {S.active
-            ? t('Set {0} of {1} completed · Tap to resume your session', activeSetsDone, activeSetsTotal)
-            : routine
-            ? t('{0} exercises planned for today', (routine.ex || []).length)
-            : t('No routine scheduled today. Rest up or swap in a workout.')}
-        </p>
-
-        {routine && !S.active && (
-          <div className="home-hero-meta">
-            <div className="home-hero-meta-item">
-              <Icon name="list" />
-              <span>{t('{0} exercises', (routine.ex || []).length)}</span>
-            </div>
-            <div className="home-hero-meta-item">
-              <Icon name="timer" />
-              <span>~45 min</span>
-            </div>
-          </div>
+      <Card
+        className={cn(
+          'relative overflow-hidden border-[var(--sep-op)] bg-[linear-gradient(135deg,var(--surface)_0%,color-mix(in_srgb,var(--surface)_78%,var(--acc)_22%)_100%)] p-5 sm:p-7',
+          S.active && 'bg-[linear-gradient(135deg,var(--surface)_0%,color-mix(in_srgb,var(--surface)_75%,var(--orange)_25%)_100%)]',
         )}
-
-        <Button
-          variant={S.active ? 'danger' : 'primary'}
-          icon={S.active ? 'play' : routine ? 'play' : 'calendar'}
-          onClick={onTodayAction}
-          style={{
-            width: '100%',
-            height: 46,
-            fontSize: 15,
-            fontWeight: 600,
-            background: S.active ? 'var(--orange)' : undefined,
-            color: S.active ? '#000' : undefined
-          }}
-        >
-          {S.active
-            ? t('Resume Workout')
-            : routine
-            ? t('Start Workout')
-            : t('Schedule a Workout')}
-        </Button>
-      </div>
-
-      {/* 7-Day Timeline Card */}
-      <div className="card" style={{ marginBottom: 14 }}>
-        <div className="row between" style={{ marginBottom: 8 }}>
-          <button
-            className="iconbtn"
-            style={{ width: 28, height: 28, fontSize: 13 }}
-            onClick={() => setWeekOffset(w => w - 1)}
-            aria-label="Previous week"
-          >
-            <Icon name="chevronLeft" />
-          </button>
-          <div className="small muted" style={{ fontWeight: 600, fontSize: 13 }}>
-            {wkLabel}
+      >
+        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[var(--acc-soft)] blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-28 -left-16 h-48 w-48 rounded-full bg-[color-mix(in_srgb,var(--purple)_13%,transparent)] blur-3xl" />
+        <div className="relative">
+          <div className="flex items-center justify-between gap-3">
+            <Badge className={cn(S.active && 'border-[color-mix(in_srgb,var(--orange)_35%,transparent)] bg-[color-mix(in_srgb,var(--orange)_15%,transparent)] text-[var(--orange)]')}>
+              {S.active ? <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--orange)]" /> : <Icon name={hasTrainerWorkout ? 'figureStrength' : routine ? glyphOf(routine.emoji) : 'moon'} className="text-[13px]" />}
+              {S.active ? t('Workout in Progress') : hasTrainerWorkout ? t('Trainer assignment') : routine ? t("Today's Session") : t('Rest & Recovery')}
+            </Badge>
+            {todayOvr && routine && <span className="text-[11px] font-medium text-[var(--label-3)]">{t('Rescheduled')}</span>}
           </div>
-          <button
-            className="iconbtn"
-            style={{ width: 28, height: 28, fontSize: 13 }}
-            onClick={() => setWeekOffset(w => w + 1)}
-            aria-label="Next week"
+          <h2 className="mt-5 max-w-[18ch] text-[clamp(1.8rem,8vw,2.8rem)] font-bold leading-[0.98] tracking-[-0.065em] text-[var(--label)]">
+            {S.active ? S.active.name : trainerRoutine?.name || trainerSchedule?.title || routine?.name || t('Rest Day')}
+          </h2>
+          <p className="mt-3 max-w-[42ch] text-sm leading-5 text-[var(--label-2)]">
+            {S.active
+              ? t('Set {0} of {1} completed · Tap to resume your session', activeSetsDone, activeSetsTotal)
+              : hasTrainerWorkout
+                ? t('{0} exercises assigned by {1}', trainerExercises.length, managementData.trainer?.name || t('your trainer'))
+                : routine
+                  ? t('{0} exercises planned for today', (routine.ex || []).length)
+                  : t('No routine scheduled today. Rest up or swap in a workout.')}
+          </p>
+          {(hasTrainerWorkout || (routine && !S.active)) && (
+            <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-medium text-[var(--label-2)]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--label)_6%,transparent)] px-2.5 py-1.5"><Icon name="list" className="text-[14px] text-[var(--acc)]" />{t('{0} exercises', hasTrainerWorkout ? trainerExercises.length : (routine?.ex || []).length)}</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--label)_6%,transparent)] px-2.5 py-1.5"><Icon name="timer" className="text-[14px] text-[var(--teal)]" />{trainerRoutine ? t('Today') : trainerSchedule ? prettySessionTime(trainerSchedule.startAt) : '~45 min'}</span>
+            </div>
+          )}
+          <Button
+            size="lg"
+            variant={S.active ? 'destructive' : 'default'}
+            className="mt-6 w-full sm:w-auto sm:min-w-[190px]"
+            onClick={onTodayAction}
           >
-            <Icon name="chevronRight" />
+            <Icon name={S.active ? 'play' : hasTrainerWorkout || routine ? 'play' : 'calendar'} className="text-[17px]" />
+            {S.active ? t('Resume Workout') : hasTrainerWorkout ? t('Start Trainer Workout') : routine ? t('Start Workout') : t('Schedule a Workout')}
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--label-3)]">{t('Your rhythm')}</p>
+            <h2 className="mt-1 text-base font-semibold tracking-[-0.025em] text-[var(--label)]">{wkLabel}</h2>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={() => setWeekOffset(value => value - 1)} aria-label={t('Previous week')}>
+              <Icon name="chevronLeft" className="text-[16px]" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={() => setWeekOffset(value => value + 1)} aria-label={t('Next week')}>
+              <Icon name="chevronRight" className="text-[16px]" />
+            </Button>
+          </div>
+        </div>
+        <div className="mt-5 grid grid-cols-7 gap-1.5 sm:gap-2">
+          {weekDays.map(day => (
+            <button
+              type="button"
+              key={day.iso}
+              onClick={() => dayOverrideSheet(day.iso)}
+              className={cn(
+                'flex min-w-0 flex-col items-center rounded-2xl px-1 py-2.5 text-center transition-all duration-200 active:scale-95',
+                day.today ? 'bg-[var(--acc)] text-[var(--on-acc)] shadow-[0_8px_20px_-12px_var(--acc)]' : 'hover:bg-[var(--surface-2)]',
+              )}
+              aria-label={day.iso}
+            >
+              <span className={cn('text-[10px] font-bold uppercase tracking-[0.08em]', day.today ? 'opacity-80' : 'text-[var(--label-3)]')}>{t(DAYS[day.date.getDay()])}</span>
+              <span className={cn('mt-2 text-sm font-semibold', day.today ? '' : 'text-[var(--label)]')}>{day.date.getDate()}</span>
+              <span className="mt-2 flex h-1.5 items-center justify-center">
+                <span className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  day.today ? 'bg-[var(--on-acc)]' : day.done ? 'bg-[var(--acc)] shadow-[0_0_8px_var(--acc)]' : day.override && day.planned ? 'bg-[var(--orange)]' : day.planned ? 'bg-[var(--label-3)]' : 'bg-transparent',
+                )} />
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-[var(--label-3)]">
+          <span className="inline-flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full bg-[var(--acc)]" />{t('Completed')}</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full bg-[var(--label-3)]" />{t('Planned')}</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full bg-[var(--orange)]" />{t('Moved')}</span>
+        </div>
+      </Card>
+
+      <section>
+        <div className="mb-3 flex items-end justify-between px-1">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--label-3)]">{t('Keep the momentum')}</p>
+            <h2 className="mt-1 text-lg font-bold tracking-[-0.04em] text-[var(--label)]">{t('Quick actions')}</h2>
+          </div>
+          <Icon name="sparkles" className="text-[var(--acc)]" />
+        </div>
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+          <button type="button" onClick={() => nav('/plan')} className="group rounded-[22px] border border-[var(--sep-op)] bg-[var(--surface)] p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--acc-line)] active:scale-[0.97] sm:p-4">
+            <span className="mb-8 flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--acc-soft)] text-[var(--acc)]"><Icon name="calendar" className="text-[17px]" /></span>
+            <span className="block text-xs font-bold text-[var(--label)]">{t('Plan')}</span>
+            <span className="mt-1 block text-[10px] leading-4 text-[var(--label-3)]">{t('Build your split')}</span>
+          </button>
+          <button type="button" onClick={() => bwSheet()} className="group rounded-[22px] border border-[var(--sep-op)] bg-[var(--surface)] p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--teal)_35%,transparent)] active:scale-[0.97] sm:p-4">
+            <span className="mb-8 flex h-9 w-9 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--teal)_15%,transparent)] text-[var(--teal)]"><Icon name="scale" className="text-[17px]" /></span>
+            <span className="block text-xs font-bold text-[var(--label)]">{t('Log weight')}</span>
+            <span className="mt-1 block text-[10px] leading-4 text-[var(--label-3)]">{t('Track the trend')}</span>
+          </button>
+          <button type="button" onClick={() => nav('/library')} className="group rounded-[22px] border border-[var(--sep-op)] bg-[var(--surface)] p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--purple)_35%,transparent)] active:scale-[0.97] sm:p-4">
+            <span className="mb-8 flex h-9 w-9 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--purple)_15%,transparent)] text-[var(--purple)]"><Icon name="list" className="text-[17px]" /></span>
+            <span className="block text-xs font-bold text-[var(--label)]">{t('Library')}</span>
+            <span className="mt-1 block text-[10px] leading-4 text-[var(--label-3)]">{t('Find a move')}</span>
           </button>
         </div>
-        <div className="week">{strip}</div>
-      </div>
+      </section>
 
-      {/* Starter Plan Prompt (for fresh profiles) */}
-      {!S.routines.length && !S.active && (
-        <div className="card" style={{ marginBottom: 14 }}>
-          <div className="row" style={{ gap: 10, marginBottom: 6 }}>
-            <span className="lrow-i">
-              <Icon name="sparkles" />
-            </span>
-            <div className="big" style={{ fontSize: 20 }}>
-              {t('Welcome to pumpd!')}
+      {!trainerAssigned && !S.routines.length && !S.active && (
+        <Card className="relative overflow-hidden border-[var(--acc-line)] bg-[linear-gradient(135deg,var(--acc-soft),transparent)] p-5 sm:p-6">
+          <div className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-[var(--acc-soft)] blur-2xl" />
+          <div className="relative flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--acc)] text-[var(--on-acc)] shadow-[0_10px_24px_-10px_var(--acc)]"><Icon name="sparkles" /></span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold tracking-[-0.04em] text-[var(--label)]">{t('Welcome to pumpd!')}</h2>
+              <p className="mt-1 text-sm leading-5 text-[var(--label-2)]">{t('Set up your weekly routine to get going — or load a ready-made Push / Pull / Legs plan.')}</p>
             </div>
           </div>
-          <div className="muted small" style={{ marginBottom: 12 }}>
-            {t(
-              'Set up your weekly routine to get going — or load a ready-made Push / Pull / Legs plan.'
-            )}
+          <div className="relative mt-5 grid gap-2 sm:grid-cols-2">
+            <><Button onClick={loadStarterPlan} className="w-full"><Icon name="sparkles" className="text-[16px]" />{t('Load starter plan (PPL)')}</Button><Button variant="secondary" onClick={() => nav('/plan')} className="w-full">{t('Build my own plan')}</Button></>
           </div>
-          <Button variant="primary" icon="sparkles" onClick={loadStarterPlan}>
-            {t('Load starter plan (PPL)')}
-          </Button>
-          <div style={{ height: 8 }} />
-          <Button onClick={() => nav('/plan')}>{t('Build my own plan')}</Button>
-        </div>
+        </Card>
       )}
 
-      {/* Body Weight & Trend Card */}
-      <div className="card" style={{ marginBottom: 14 }}>
-        <div className="row between" style={{ marginBottom: 8 }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
-            {t('Body weight')}
-          </h2>
-          <div className="row" style={{ gap: 6 }}>
-            <Button
-              size="sm"
-              icon="target"
-              style={S.targetW ? { color: 'var(--yellow)' } : undefined}
-              onClick={goalSheet}
-            >
-              {S.targetW ? fmtNum(S.targetW) : t('Goal')}
-            </Button>
-            <Button size="sm" icon="plus" onClick={() => bwSheet()}>
-              {t('Log')}
-            </Button>
-          </div>
-        </div>
-
-        {bw ? (
-          <>
-            <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
-              <div className="big" style={{ fontSize: 28, fontWeight: 750 }}>
-                {fmtNum(bw.w)}{' '}
-                <span className="muted" style={{ fontSize: '1rem', fontWeight: 500 }}>
-                  {S.unit}
-                </span>
-              </div>
+      <Card className="overflow-hidden p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--label-3)]">{t('Body weight')}</p>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-3xl font-bold tracking-[-0.06em] text-[var(--label)]">{bw ? fmtNum(bw.w) : '—'}</span>
+              <span className="text-sm font-medium text-[var(--label-3)]">{S.unit}</span>
               {!!delta && (
-                <span
-                  className="small row"
-                  style={{
-                    gap: 3,
-                    fontWeight: 600,
-                    padding: '2px 8px',
-                    borderRadius: 12,
-                    background: 'var(--surface-2)',
-                    color: bwDeltaColor(delta, bw.w)
-                  }}
-                >
-                  <Icon name={delta > 0 ? 'arrowUp' : 'arrowDown'} style={{ fontSize: 11 }} />
-                  {fmtNum(Math.abs(delta))} {S.unit}
+                <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-[var(--surface-2)] px-2 py-1 text-[11px] font-semibold" style={{ color: bwDeltaColor(delta, bw.w) }}>
+                  <Icon name={delta > 0 ? 'arrowUp' : 'arrowDown'} className="text-[11px]" />{fmtNum(Math.abs(delta))}
                 </span>
               )}
-              <span className="dim small" style={{ marginLeft: 'auto', fontSize: 12 }}>
-                {fmtDate(bw.d, true)}
-              </span>
             </div>
-
-            {S.targetW && (
-              <div style={{ marginTop: 8 }}>
-                <div className="small row between" style={{ color: 'var(--yellow)', fontSize: 12.5, fontWeight: 500 }}>
-                  <span className="row" style={{ gap: 4 }}>
-                    <Icon name="target" style={{ fontSize: 13 }} />
-                    <span>
-                      {t('Goal')}: {fmtNum(S.targetW)} {S.unit}
-                    </span>
-                  </span>
-                  <span>
-                    {Math.abs(S.targetW - bw.w) < 0.05
-                      ? t('reached!')
-                      : t(
-                          S.targetW > bw.w ? '{0} to gain' : '{0} to lose',
-                          `${fmtNum(Math.abs(S.targetW - bw.w))} ${S.unit}`
-                        )}
-                  </span>
-                </div>
-                <div className="home-goal-progress">
-                  <div className="home-goal-fill" style={{ width: `${goalPct}%` }} />
-                </div>
-              </div>
-            )}
-
-            <div className="chart" style={{ marginTop: 10 }}>
-              <LineChart points={bwPoints} h={130} unit={S.unit} goal={S.targetW} />
+            {bw && <p className="mt-1 text-[11px] text-[var(--label-3)]">{fmtDate(bw.d, true)}</p>}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button variant="ghost" size="sm" onClick={goalSheet} className={cn(S.targetW && 'text-[var(--yellow)]')}><Icon name="target" className="text-[14px]" />{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
+            <Button size="sm" onClick={() => bwSheet()}><Icon name="plus" className="text-[14px]" />{t('Log')}</Button>
+          </div>
+        </div>
+        {bw && S.targetW && (
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-medium text-[var(--yellow)]">
+              <span className="inline-flex items-center gap-1.5"><Icon name="target" className="text-[13px]" />{t('Goal')}: {fmtNum(S.targetW)} {S.unit}</span>
+              <span>{Math.abs(S.targetW - bw.w) < 0.05 ? t('reached!') : t(S.targetW > bw.w ? '{0} to gain' : '{0} to lose', `${fmtNum(Math.abs(S.targetW - bw.w))} ${S.unit}`)}</span>
             </div>
-          </>
-        ) : (
-          <div className="muted small" style={{ padding: '8px 0', lineHeight: 1.45 }}>
-            {t(
-              "No entries yet — log your weight to start the curve. It's also asked before every workout."
-            )}
+            <Progress value={goalPct} />
           </div>
         )}
-      </div>
-    </div>
+        {bw ? (
+          <div className="chart mt-4 min-h-[130px]">
+            <LineChart points={bwPoints} h={130} unit={S.unit} goal={S.targetW} />
+          </div>
+        ) : (
+          <div className="mt-6 rounded-2xl bg-[var(--surface-2)] px-4 py-5 text-sm leading-5 text-[var(--label-2)]">{t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>
+        )}
+      </Card>
+    </main>
   )
 }

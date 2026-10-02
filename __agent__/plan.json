@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "title": "inspect Plan day cards and tab-bar start flow",
+      "status": "done"
+    },
+    {
+      "title": "make trainer day cards open exercise details on click",
+      "status": "done"
+    },
+    {
+      "title": "start today’s trainer assignment from the tab bar",
+      "status": "done"
+    },
+    {
+      "title": "run tests and production checks",
+      "status": "done"
+    }
+  ],
+  "updated_at": "2026-10-02T08:49:55.873Z",
+  "session_id": "01a0fb50-6dea-7563-b2c8-cd74d625f262"
+}

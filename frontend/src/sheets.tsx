@@ -20,6 +20,7 @@ import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-sha
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression'
 import { MOBILE, shareExport } from './lib/mobile'
+import { api } from './lib/api'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -997,6 +998,29 @@ function DayAssign({ day, close }) {
 }
 export const dayAssignSheet = day => ui().openSheet(close => <DayAssign day={day} close={close} />)
 
+function TrainerDayDetails({ day, routine, close }) {
+  return <>
+    <SheetHeader
+      title={routine?.name || t('Rest & Recovery')}
+      subtitle={`${t(DAYN[day])} · ${routine ? t('Trainer assigned') : t('Recovery day')}`}
+      onClose={close}
+    />
+    {routine?.ex?.length ? <div className="list" style={{ gap: 0 }}>
+      {routine.ex.map((exercise, index) => {
+        const details = EXIDX[exercise.id] || { n: t('Unknown exercise'), eq: '' }
+        return <div className="item" key={`${routine.id}-${exercise.id}-${index}`}>
+          <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 9, fontSize: 17 }}><Icon name="dumbbell" /></span>
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="tt" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{details.n}</div>
+            <div className="ss">{exercise.sets || 3} × {exercise.reps || 10}{details.eq ? ` · ${details.eq}` : ''}</div>
+          </div>
+        </div>
+      })}
+    </div> : <div className="card" style={{ margin: 0, textAlign: 'center' }}><div className="big" style={{ fontSize: 20 }}>{t('Rest & Recovery')}</div><div className="muted small" style={{ marginTop: 5 }}>{t('No exercises scheduled for this day.')}</div></div>}
+  </>
+}
+export const trainerDaySheet = (day, routine) => ui().openSheet(close => <TrainerDayDetails day={day} routine={routine} close={close} />)
+
 /* ============================ workout detail ============================ */
 function WorkoutDetail({ w, close }) {
   const st = useStore(s => s.S)
@@ -1102,6 +1126,60 @@ export function WorkoutRow({ w, onClick }) {
 /* ============================ workout lifecycle ============================ */
 export function startFlow(routineId) {
   bwSheet({ required: true, onDone: bw => beginWorkout(routineId, bw) })
+}
+export function startExerciseFlow(exercise, assignment) {
+  bwSheet({ required: true, onDone: bw => beginAssignedExercise(exercise, assignment, bw) })
+}
+export function beginAssignedExercise(exercise, assignment, bw) {
+  const st = S()
+  const cfg = {
+    id: exercise.id,
+    sets: assignment.targetSets || 3,
+    reps: assignment.targetReps || 10,
+    weight: assignment.targetWeight || 0,
+    mode: assignment.mode || (isCardio(exercise) ? 'cardio' : 'reps')
+  }
+  const plan = nextPrescription(st, cfg, null)
+  const entries = [{ id: cfg.id, target: { ...cfg }, plan, sets: applyPrescription(buildSets(st, cfg), plan) }]
+  update(s => {
+    s.active = { id: uid(), d: todayISO(), start: Date.now(), routineId: null, assignmentId: assignment.id, assignmentType: 'exercise', assignedExerciseIds: [{ assignmentId: assignment.id, exerciseId: cfg.id }], name: exercise.n || assignment.name, bw: bw || null, cur: 0, entries }
+  })
+  useUI.getState().stopRest()
+  nav('/workout')
+}
+export function startAssignedRoutineFlow(routine) {
+  bwSheet({ required: true, onDone: bw => beginAssignedRoutine(routine, bw) })
+}
+export function beginAssignedRoutine(routine, bw) {
+  const st = S()
+  const entries = (routine?.ex || []).map(cfg => {
+    const plan = nextPrescription(st, cfg, routine)
+    return { id: cfg.id, sg: cfg.sg, target: { ...cfg }, plan, sets: applyPrescription(buildSets(st, cfg), plan) }
+  })
+  if (!entries.length) { toast(t('Your trainer has not assigned exercises to this routine yet.')); return }
+  update(s => {
+    s.active = { id: uid(), d: todayISO(), start: Date.now(), routineId: null, assignedRoutineId: routine.id, name: routine.name || t('Trainer workout'), bw: bw || null, cur: 0, entries }
+  })
+  useUI.getState().stopRest()
+  nav('/workout')
+}
+export function startAssignedWorkoutFlow(assignments, schedule) {
+  bwSheet({ required: true, onDone: bw => beginAssignedWorkout(assignments, schedule, bw) })
+}
+export function beginAssignedWorkout(assignments, schedule, bw) {
+  const st = S()
+  const linked = (assignments || []).filter(assignment => assignment.exerciseId && EXIDX[assignment.exerciseId])
+  const entries = linked.map(assignment => {
+    const cfg = { id: assignment.exerciseId, sets: assignment.targetSets || 3, reps: assignment.targetReps || 10, weight: assignment.targetWeight || 0, mode: assignment.mode || (isCardio(assignment.exerciseId) ? 'cardio' : 'reps') }
+    const plan = nextPrescription(st, cfg, null)
+    return { id: cfg.id, target: { ...cfg }, plan, sets: applyPrescription(buildSets(st, cfg), plan) }
+  })
+  if (!entries.length) { toast(t('Your trainer has not assigned exercises to this session yet.')); return }
+  update(s => {
+    s.active = { id: uid(), d: todayISO(), start: Date.now(), routineId: null, assignedScheduleId: schedule?.id || null, assignedExerciseIds: linked.map(assignment => ({ assignmentId: assignment.id, exerciseId: assignment.exerciseId })), name: schedule?.title || t('Trainer workout'), bw: bw || null, cur: 0, entries }
+  })
+  useUI.getState().stopRest()
+  nav('/workout')
 }
 export function beginWorkout(routineId, bw) {
   const st = S()
@@ -1237,6 +1315,8 @@ function doFinishWorkout() {
   if (!A) return
   const prs = []
   const e1prs = []
+  const done = setsDoneActive(A)
+  const total = A.entries.reduce((n, entry) => n + entry.sets.length, 0)
   A.entries.forEach(e => {
     const mx = Math.max(0, ...e.sets.filter(s => s.done).map(s => s.w))
     if (mx > 0 && mx > bestWeightFor(st, e.id)) prs.push(e.id)
@@ -1262,6 +1342,16 @@ function doFinishWorkout() {
     s.workouts.push(w)
     s.active = null
   })
+  const assignedLinks = A.assignedExerciseIds || (A.assignmentId ? [{ assignmentId: A.assignmentId, exerciseId: A.entries[0]?.id }] : [])
+  assignedLinks.forEach(link => {
+    const entry = w.entries.find(item => item.id === link.exerciseId)
+    const entryTarget = A.entries.find(item => item.id === link.exerciseId)
+    const entryTotal = entryTarget?.sets?.length || 0
+    const entryDone = entry?.sets?.filter(set => set.done).length || 0
+    const assignmentStatus = entryDone >= entryTotal && entryTotal > 0 ? 'hit' : entryDone > 0 ? 'partial' : 'missed'
+    api('/api/management/assignments/log', { method: 'POST', body: JSON.stringify({ assignmentType: 'exercise', assignmentId: link.assignmentId, status: assignmentStatus, metric: `${entryDone}/${entryTotal} sets` }) }).catch(() => {})
+  })
+  if (A.assignedScheduleId) api('/api/management/assignments/log', { method: 'POST', body: JSON.stringify({ assignmentType: 'schedule', assignmentId: A.assignedScheduleId, status: done >= total ? 'hit' : 'partial', metric: `${done}/${total} sets` }) }).catch(() => {})
   useUI.getState().stopRest()
   beep(snd(), 880, 0.15); beep(snd(), 1100, 0.15, 0.18); beep(snd(), 1320, 0.3, 0.36)
   ui().openSheet(close => <FinishSummary w={w} prs={prs} e1prs={e1prs} close={close} />, { kind: 'center', locked: true })

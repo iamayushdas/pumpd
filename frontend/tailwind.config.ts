@@ -137,6 +137,8 @@ export default {
     // Disable Tailwind's default reset since we have our own
     preflight: false,
   },
-  important: false,
+  // The legacy stylesheet below intentionally owns the reset outside Tailwind's
+  // cascade layers. Keep the new shadcn utilities authoritative over it.
+  important: true,
 }
 

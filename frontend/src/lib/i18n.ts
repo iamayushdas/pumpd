@@ -36,9 +36,9 @@ export const getLang = () => lang
 export const dateLocale = () => DATE_LOCALES[lang] || 'en-GB'
 
 // Translate a source string; {0},{1}… are replaced with args (also on the English fallback).
-export function t(s: string, ...args: string[]): string {
+export function t(s: string, ...args: Array<string | number>): string {
   let v = dict[s] || s
-  for (let i = 0; i < args.length; i++) v = v.replaceAll('{' + i + '}', args[i])
+  for (let i = 0; i < args.length; i++) v = v.replaceAll('{' + i + '}', String(args[i]))
   return v
 }
 // Instructions for an exercise in the current language (English steps as fallback).

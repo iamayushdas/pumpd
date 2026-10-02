@@ -14,6 +14,8 @@ import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets'
 import Icon from '../components/Icon'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui'
 import { ProfileSettings } from '../components/ProfileSettings'
+import PersonaPicker, { personaLabel } from '../components/PersonaPicker'
+import type { PersonaRole } from '../types/store/user'
 
 export default function Settings() {
   const nav = useNavigate()
@@ -132,6 +134,8 @@ export default function Settings() {
                  {user ? user.name : MOBILE ? t('Local Mobile Profile') : DEMO ? t('Demo Account') : t('Guest User')}
                </span>
                {user && <span className="settings-status-tag">{t('Passkey')}</span>}
+               {user && <span className="settings-status-tag">{personaLabel(user.role, user.admin)}</span>}
+               {user?.admin && <span className="settings-status-tag">{t('Admin access')}</span>}
              </div>
              <div className="settings-profile-sub">
                {user
@@ -169,16 +173,51 @@ export default function Settings() {
           </div>
         )}
 
-        {user && user.admin && (
-          <div style={{ marginTop: 12 }}>
-            <Button
-              size="sm"
-              variant="tinted"
-              icon="wrench"
-              onClick={() => nav('/admin')}
-            >
-              {t('Open Admin Dashboard')}
-            </Button>
+        {user && (
+          <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
+            {/* Gym Operations Card */}
+            <div className="settings-workspace-card" onClick={() => nav('/management')}>
+              <div className="settings-workspace-icon" style={{ background: 'var(--blue)' }}>
+                <Icon name="wrench" />
+              </div>
+              <div className="settings-workspace-content">
+                <div className="settings-workspace-title">
+                  {user.admin ? t('Gym Operations') : user.role === 'owner' || user.role === 'trainer' ? t('Coach Workspace') : t('My Gym Portal')}
+                </div>
+                <div className="settings-workspace-desc">
+                  {user.admin || user.role === 'owner' 
+                    ? t('Manage members, training plans, nutrition protocols, and fees')
+                    : user.role === 'trainer'
+                    ? t('Assign workouts, track squad progress, and manage your trainees')
+                    : t('View your training plan, nutrition guide, and membership status')}
+                </div>
+                <div className="settings-workspace-badge">
+                  <Icon name="house" style={{ fontSize: 11 }} />
+                  <span>{t('Gym-specific')}</span>
+                </div>
+              </div>
+              <Icon name="chevronRight" className="settings-workspace-arrow" />
+            </div>
+
+            {/* System Admin Card - Only for Admins */}
+            {user.admin && (
+              <div className="settings-workspace-card" onClick={() => nav('/admin')}>
+                <div className="settings-workspace-icon" style={{ background: 'var(--red)' }}>
+                  <Icon name="shield" />
+                </div>
+                <div className="settings-workspace-content">
+                  <div className="settings-workspace-title">{t('System Administration')}</div>
+                  <div className="settings-workspace-desc">
+                    {t('Platform-wide user management, invite codes, and access control')}
+                  </div>
+                  <div className="settings-workspace-badge system-badge">
+                    <Icon name="shield" style={{ fontSize: 11 }} />
+                    <span>{t('System-wide')}</span>
+                  </div>
+                </div>
+                <Icon name="chevronRight" className="settings-workspace-arrow" />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -596,16 +635,22 @@ function PushCard({ S, update, toast }) {
 /* ---------- Passkey Register Sheet ---------- */
 function RegisterInline({ close, setUser, pushState, pullState, toast }) {
   const nameRef = useRef(null)
+  const [persona, setPersona] = useState<Exclude<PersonaRole, 'admin'>>('member')
   const [code, setCode] = useState('')
+  const [gymId, setGymId] = useState('')
+  const [gyms, setGyms] = useState<any[]>([])
   const [inviteOnly, setInviteOnly] = useState(false)
-  useEffect(() => { api('/api/config').then(c => setInviteOnly(!!c.invite_only)).catch(() => {}) }, [])
+  useEffect(() => {
+    api('/api/config').then(c => setInviteOnly(!!c.invite_only)).catch(() => {})
+    api('/api/gyms').then(r => setGyms(r.gyms || [])).catch(() => {})
+  }, [])
 
   const go = async () => {
     const n = (nameRef.current?.value || '').trim()
     if (!n) { toast(t('Enter a name')); return }
     if (inviteOnly && !code.trim()) { toast(t('An invite code is required')); return }
     try {
-      const u = await passkeyRegister(n, code.trim())
+      const u = await passkeyRegister(n, code.trim(), persona, gymId.trim() || undefined)
       setUser(u)
       close()
       if (hasData(useStore.getState().S)) {
@@ -631,6 +676,25 @@ function RegisterInline({ close, setUser, pushState, pullState, toast }) {
         {t('Pick a username, then authenticate securely with your device passkey.')}
       </div>
       <TextField ref={nameRef} placeholder={t('Your Name / Handle')} maxLength={40} />
+      <div style={{ height: 14 }} />
+      <PersonaPicker value={persona} onChange={setPersona} />
+      <div style={{ height: 10 }} />
+      <input
+        list="settings-available-gyms"
+        className="field"
+        placeholder={t('Gym ID (optional)')}
+        maxLength={80}
+        value={gymId}
+        onChange={e => setGymId(e.target.value)}
+        style={{ width: '100%', borderRadius: 10, padding: '9px 12px', fontSize: 14 }}
+      />
+      {gyms.length > 0 && (
+        <datalist id="settings-available-gyms">
+          {gyms.map(g => (
+            <option key={g.id} value={g.id}>{g.name} ({g.id})</option>
+          ))}
+        </datalist>
+      )}
       {inviteOnly && (
         <>
           <div style={{ height: 10 }} />

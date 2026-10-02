@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { effectiveRoutine } from '../lib/history'
 import { todayISO } from '../lib/format'
 import { t } from '../lib/i18n'
+import { getManagementOverview } from '../lib/api'
+import { startAssignedRoutineFlow } from '../sheets'
 import Icon from './Icon'
 
 export default function TabBar({ onStart }) {
@@ -11,6 +14,16 @@ export default function TabBar({ onStart }) {
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
   const isGuest = useStore(s => s.isGuest())
+  const [managementData, setManagementData] = useState(null)
+
+  useEffect(() => {
+    if (user?.role !== 'member') {
+      setManagementData(null)
+      return
+    }
+    getManagementOverview().then(setManagementData).catch(() => setManagementData(null))
+  }, [user?.id, user?.role])
+
   if (!user && !isGuest) return null
 
   const cur = loc.pathname.split('/')[1] || 'home'
@@ -26,6 +39,14 @@ export default function TabBar({ onStart }) {
 
   const startWorkout = () => {
     if (!S.active) {
+      const assignedPlan = user?.role === 'member' ? managementData?.trainingPlan : null
+      const assignedRoutine = assignedPlan
+        ? (assignedPlan.routines || []).find(routine => routine.id === assignedPlan.week?.[new Date().getDay()])
+        : null
+      if (assignedRoutine) {
+        startAssignedRoutineFlow(assignedRoutine)
+        return
+      }
       const r = effectiveRoutine(S, todayISO())
       if (r && r.ex.length) {
         onStart(r.id)
@@ -44,6 +65,7 @@ export default function TabBar({ onStart }) {
   }
 
   const isFeedPage = cur === 'feed'
+  const isStaff = !!user && (user.admin || user.role === 'owner' || user.role === 'trainer')
 
   const Tab = ({ k, icon, to, label }) => (
     <button
@@ -51,6 +73,7 @@ export default function TabBar({ onStart }) {
       className={on(k) ? 'on' : ''}
       onClick={() => nav(to)}
       aria-label={label}
+      aria-current={on(k) ? 'page' : undefined}
     >
       <Icon name={icon} />
       <span>{label}</span>
@@ -75,7 +98,9 @@ export default function TabBar({ onStart }) {
       </button>
 
       <Tab k="stats" icon="chart" to="/stats" label={t('Stats')} />
-      <Tab k="library" icon="list" to="/library" label={t('Library')} />
+      {isStaff
+        ? <Tab k="management" icon="wrench" to="/management" label={t('Manage')} />
+        : <Tab k="library" icon="list" to="/library" label={t('Library')} />}
     </nav>
   )
 }

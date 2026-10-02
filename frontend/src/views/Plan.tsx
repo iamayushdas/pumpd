@@ -1,20 +1,28 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
+import { getManagementOverview } from '../lib/api'
 import { DAYN, uid, exCount } from '../lib/format'
 import { t } from '../lib/i18n'
-import { dayAssignSheet, loadStarterPlan, planToolsSheet, startFlow, confirmSheet } from '../sheets'
+import { dayAssignSheet, trainerDaySheet, loadStarterPlan, planToolsSheet, startFlow, confirmSheet } from '../sheets'
 import Icon from '../components/Icon'
 import { Button } from '../components/ui'
 import { glyphOf, DEFAULT_GLYPH } from '../lib/glyphs'
-import { EXIDX } from '../lib/exercises'
+import { EXIDX, exOr } from '../lib/exercises'
 import { POLICY_NAME } from '../lib/progression'
 
 export default function Plan() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
+  const user = useStore(s => s.user)
   const update = useStore(s => s.update)
   const [tab, setTab] = useState('schedule') // 'schedule' | 'routines'
+  const [trainerPlan, setTrainerPlan] = useState(null)
+
+  const reloadTrainerPlan = () => getManagementOverview().then(setTrainerPlan).catch(() => {})
+  useEffect(() => {
+    if (user?.role === 'member') reloadTrainerPlan()
+  }, [user?.id, user?.role])
 
   const addRoutine = () => {
     const r = { id: uid(), name: t('New routine'), emoji: DEFAULT_GLYPH, ex: [] }
@@ -24,10 +32,15 @@ export default function Plan() {
     nav('/plan/r/' + r.id)
   }
 
-  // Calculate stats
-  const activeDays = Object.values(S.week || {}).filter(Boolean).length
+  const assignedPlan = user?.role === 'member' ? trainerPlan?.trainingPlan : null
+  const scheduleRoutines = assignedPlan?.routines || S.routines
+  const scheduleWeek = assignedPlan?.week || S.week
+  const trainerManaged = !!assignedPlan
+
+  // Calculate stats from the trainer plan when one is assigned, otherwise use the member's plan.
+  const activeDays = Object.values(scheduleWeek || {}).filter(Boolean).length
   const restDays = 7 - activeDays
-  const totalRoutines = S.routines.length
+  const totalRoutines = scheduleRoutines.length
 
   // Extract unique muscle groups trained in routines
   const getRoutineMuscles = r => {
@@ -102,6 +115,7 @@ export default function Plan() {
         </div>
       </div>
 
+
       {/* Program Summary Card */}
       <div className="plan-overview-card">
         <div className="row between">
@@ -159,32 +173,34 @@ export default function Plan() {
         <div>
           <div className="row between" style={{ marginBottom: 10 }}>
             <h4 className="sec" style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '.02em' }}>
-              {t('WEEKDAY ASSIGNMENTS')}
+              {trainerManaged ? 'TRAINER WEEKDAY ASSIGNMENTS' : t('WEEKDAY ASSIGNMENTS')}
             </h4>
             <span className="dim small" style={{ fontSize: 12 }}>
-              {t('Tap any day to change')}
+              {trainerManaged ? `Assigned by ${trainerPlan?.trainer?.name || 'your trainer'}` : t('Tap any day to change')}
             </span>
           </div>
 
           <div style={{ marginBottom: 20 }}>
             {[1, 2, 3, 4, 5, 6, 0].map(d => {
-              const r = S.routines.find(x => x.id === S.week[d])
+              const r = scheduleRoutines.find(x => x.id === scheduleWeek[d])
               return (
                 <div
                   key={d}
-                  className="plan-day-item"
-                  onClick={() => dayAssignSheet(d)}
+                  className={'plan-day-item' + (trainerManaged ? ' trainer-plan-day-item' : '')}
+                  onClick={trainerManaged ? () => trainerDaySheet(d, r) : () => dayAssignSheet(d)}
                 >
                   <div className="plan-day-tag">{t(DAYN[d].slice(0, 3))}</div>
 
                   <div className="grow" style={{ minWidth: 0 }}>
                     {r ? (
-                      <div className="plan-routine-pill active">
-                        <Icon name={glyphOf(r.emoji)} />
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {r.name}
-                        </span>
-                      </div>
+                      <>
+                        <div className="plan-routine-pill active">
+                          <Icon name={glyphOf(r.emoji)} />
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {r.name}
+                          </span>
+                        </div>
+                      </>
                     ) : (
                       <div className="plan-routine-pill rest">
                         <Icon name="moon" />
@@ -210,28 +226,28 @@ export default function Plan() {
         <div>
           <div className="row between" style={{ marginBottom: 12 }}>
             <h4 className="sec" style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '.02em' }}>
-              {t('CUSTOM ROUTINES')}
+              {trainerManaged ? 'TRAINER ROUTINES' : t('CUSTOM ROUTINES')}
             </h4>
-            <Button
+            {!trainerManaged && <Button
               size="sm"
               variant="primary"
               icon="plus"
               onClick={addRoutine}
             >
               {t('New Routine')}
-            </Button>
+            </Button>}
           </div>
 
-          {S.routines.length ? (
+          {(trainerManaged ? scheduleRoutines : S.routines).length ? (
             <div>
-              {S.routines.map(r => {
+              {(trainerManaged ? scheduleRoutines : S.routines).map(r => {
                 const muscles = getRoutineMuscles(r)
                 const progName = POLICY_NAME[r.prog || 'linear']
                 return (
                   <div key={r.id} className="plan-routine-card">
                     <div
-                      className="plan-routine-head"
-                      onClick={() => nav('/plan/r/' + r.id)}
+                      className={'plan-routine-head' + (trainerManaged ? ' trainer-plan-routine-head' : '')}
+                      onClick={!trainerManaged ? () => nav('/plan/r/' + r.id) : undefined}
                     >
                       <div className="plan-routine-avatar">
                         <Icon name={glyphOf(r.emoji)} />
@@ -246,7 +262,7 @@ export default function Plan() {
                           </span>
                         </div>
                       </div>
-                      <Icon name="chevronRight" className="chev" />
+                      <Icon name={trainerManaged ? 'lock' : 'chevronRight'} className="chev" />
                     </div>
 
                     {muscles.length > 0 && (
@@ -259,7 +275,15 @@ export default function Plan() {
                       </div>
                     )}
 
-                    <div className="plan-routine-acts">
+                    {trainerManaged && r.ex?.length > 0 && <div className="trainer-routine-exercises">
+                      <div className="trainer-routine-exercises-title"><Icon name="dumbbell" /> Assigned exercises</div>
+                      {r.ex.map((exercise, index) => {
+                        const details = exOr(exercise.id)
+                        return <div className="trainer-routine-exercise" key={`${r.id}-${exercise.id}-${index}`}><span className="trainer-routine-exercise-index">{index + 1}</span><div><strong>{details.n}</strong><small>{exercise.sets || 3} × {exercise.reps || 10}{details.eq ? ` · ${details.eq}` : ''}</small></div></div>
+                      })}
+                    </div>}
+
+                    {!trainerManaged ? <div className="plan-routine-acts">
                       <Button
                         size="sm"
                         variant="primary"
@@ -278,7 +302,7 @@ export default function Plan() {
                       >
                         {t('Edit')}
                       </Button>
-                    </div>
+                    </div> : <div className="plan-routine-acts"><span className="tag acc"><Icon name="lock" /> Assigned by trainer</span></div>}
                   </div>
                 )
               })}
