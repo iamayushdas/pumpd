@@ -21,6 +21,7 @@ import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression'
 import { MOBILE, shareExport } from './lib/mobile'
 import { api } from './lib/api'
+import WorkoutShareCard from './components/WorkoutShareCard'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -1265,6 +1266,80 @@ export const workoutCompleteSheet = () => ui().openSheet(close => <WorkoutComple
 
 function FinishSummary({ w, prs, e1prs = [], close }) {
   const st = useStore(s => s.S)
+  const [showShare, setShowShare] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<'modern' | 'minimal' | 'stats' | 'gradient'>('modern')
+  const [generating, setGenerating] = useState(false)
+  const shareCardRef = useRef<HTMLDivElement>(null)
+
+  const handleSave = async () => {
+    if (!shareCardRef.current) return
+    setGenerating(true)
+    try {
+      const { downloadWorkoutImage } = await import('./lib/shareWorkout')
+      await downloadWorkoutImage(shareCardRef.current, `workout-${w.name.replace(/\s+/g, '-')}-${Date.now()}.png`)
+      useUI.getState().toast(t('Workout saved to device!'))
+    } catch (error) {
+      useUI.getState().toast(t('Failed to save workout'))
+      console.error(error)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const handleShare = async () => {
+    if (!shareCardRef.current) return
+    setGenerating(true)
+    try {
+      const { shareWorkoutImage } = await import('./lib/shareWorkout')
+      await shareWorkoutImage(shareCardRef.current, w.name)
+    } catch (error) {
+      useUI.getState().toast(t('Failed to share workout'))
+      console.error(error)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  if (showShare) {
+    return <div style={{ padding: '6px 0' }}>
+      <h3 style={{ margin: '0 0 14px', fontSize: 20, fontWeight: 600, textAlign: 'center' }}>{t('Share Your Workout')}</h3>
+      
+      <div style={{ marginBottom: 16 }}>
+        <div className="small muted" style={{ marginBottom: 8, textAlign: 'center' }}>{t('Choose a template')}</div>
+        <div className="chips" style={{ justifyContent: 'center', marginBottom: 16 }}>
+          <button className={selectedTemplate === 'modern' ? 'chip on' : 'chip'} onClick={() => setSelectedTemplate('modern')}>{t('Modern')}</button>
+          <button className={selectedTemplate === 'minimal' ? 'chip on' : 'chip'} onClick={() => setSelectedTemplate('minimal')}>{t('Minimal')}</button>
+          <button className={selectedTemplate === 'stats' ? 'chip on' : 'chip'} onClick={() => setSelectedTemplate('stats')}>{t('Stats')}</button>
+          <button className={selectedTemplate === 'gradient' ? 'chip on' : 'chip'} onClick={() => setSelectedTemplate('gradient')}>{t('Gradient')}</button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 16, overflow: 'auto', maxHeight: '50vh' }}>
+        <div style={{ display: 'inline-block', transform: 'scale(0.5)', transformOrigin: 'top left', width: '200%' }}>
+          <WorkoutShareCard
+            ref={shareCardRef}
+            workout={w}
+            prs={prs}
+            unit={st.unit}
+            body={st.body}
+            template={selectedTemplate}
+            appName="Pumpd"
+          />
+        </div>
+      </div>
+
+      <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+        <Button icon="download" onClick={handleSave} disabled={generating}>
+          {generating ? t('Generating...') : t('Save to Device')}
+        </Button>
+        <Button variant="primary" icon="share" onClick={handleShare} disabled={generating}>
+          {generating ? t('Generating...') : t('Share')}
+        </Button>
+      </div>
+      <Button onClick={() => setShowShare(false)}>{t('Back')}</Button>
+    </div>
+  }
+
   return <div style={{ textAlign: 'center', padding: '6px 0' }}>
     <div style={{
       width: 52,
@@ -1297,6 +1372,7 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
       <h4 className="sec" style={{ margin: '0 0 10px' }}>{t('What you just trained')}</h4>
       <BodyMap load={loadOfWorkouts([w])} body={st.body} />
     </div>
+    <Button variant="tinted" icon="share" onClick={() => setShowShare(true)} style={{ marginBottom: 8 }}>{t('Save & Share')}</Button>
     <Button variant="primary" onClick={() => { close(); nav('/home') }}>{t('Done')}</Button>
   </div>
 }

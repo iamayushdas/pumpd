@@ -18,16 +18,31 @@ import {
   logAssignment,
 } from '../lib/api'
 import Icon from '../components/Icon'
-import { Button, TextField, TextArea } from '../components/ui'
+import { Button, TextField, TextArea, SelectButton } from '../components/ui'
 import { personaLabel } from '../components/PersonaPicker'
-import PageBreadcrumb from '../components/PageBreadcrumb'
 import WorkspaceNav from '../components/WorkspaceNav'
 import type { PersonaRole } from '../types/store/user'
 
 const roles: PersonaRole[] = ['member', 'trainer', 'owner', 'admin']
 const PLAN_DAYS = [1, 2, 3, 4, 5, 6, 0]
-const PLAN_DAY_LABELS: Record<number, string> = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 0: 'Sunday' }
-const PLAN_DAY_SHORT: Record<number, string> = { 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT', 0: 'SUN' }
+const PLAN_DAY_LABELS: Record<number, string> = {
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+  0: 'Sunday',
+}
+const PLAN_DAY_SHORT: Record<number, string> = {
+  1: 'MON',
+  2: 'TUE',
+  3: 'WED',
+  4: 'THU',
+  5: 'FRI',
+  6: 'SAT',
+  0: 'SUN',
+}
 const blankWeek = () => PLAN_DAYS.reduce((week, day) => ({ ...week, [day]: '' }), {} as Record<number, string>)
 
 const prettyDate = (value: string | number | Date | null | undefined) =>
@@ -55,185 +70,6 @@ const FOOD_PRESETS = [
   { name: 'Greek Yogurt & Honey', serving: '200g 0% Greek yogurt + almonds', time: '16:00' },
 ]
 
-function GenZBadge({ children, variant = 'acc', icon }: { children: React.ReactNode; variant?: 'acc' | 'orange' | 'purple' | 'blue' | 'pink' | 'neutral'; icon?: string }) {
-  return (
-    <span className={`gz-badge gz-badge-${variant}`}>
-      {icon && <Icon name={icon} />}
-      <span>{children}</span>
-    </span>
-  )
-}
-
-function BentoStat({
-  label,
-  value,
-  sub,
-  icon,
-  accent = 'var(--acc)',
-  trend,
-  onClick,
-}: {
-  label: string
-  value: string | number
-  sub?: string
-  icon: string
-  accent?: string
-  trend?: string
-  onClick?: () => void
-}) {
-  return (
-    <div
-      className={`gz-bento-stat ${onClick ? 'interactive' : ''}`}
-      onClick={onClick}
-      style={{ '--stat-acc': accent } as React.CSSProperties}
-    >
-      <div className="gz-bento-stat-top">
-        <span className="gz-bento-stat-icon">
-          <Icon name={icon} />
-        </span>
-        {trend && <span className="gz-bento-stat-trend">{trend}</span>}
-      </div>
-      <div className="gz-bento-stat-val">{value}</div>
-      <div className="gz-bento-stat-label">{label}</div>
-      {sub && <div className="gz-bento-stat-sub">{sub}</div>}
-    </div>
-  )
-}
-
-function SectionPanel({
-  title,
-  tag,
-  icon,
-  children,
-  badge,
-  action,
-  glow = false,
-}: {
-  title: string
-  tag?: string
-  icon: string
-  children: React.ReactNode
-  badge?: React.ReactNode
-  action?: React.ReactNode
-  glow?: boolean
-}) {
-  return (
-    <section className={`card gz-card ${glow ? 'gz-card-glow' : ''}`}>
-      <div className="gz-card-header">
-        <div className="gz-card-header-left">
-          <span className="gz-card-icon">
-            <Icon name={icon} />
-          </span>
-          <div>
-            {tag && <div className="gz-card-tag">{tag}</div>}
-            <h2 className="gz-card-title">{title}</h2>
-          </div>
-        </div>
-        <div className="gz-card-header-right">
-          {badge}
-          {action}
-        </div>
-      </div>
-      <div className="gz-card-body">{children}</div>
-    </section>
-  )
-}
-
-function CustomPicker({
-  label,
-  value,
-  options,
-  onChange,
-  placeholder = 'Select option…',
-  searchable = false,
-  icon,
-}: {
-  label?: string
-  value: string
-  options: Array<{ value: string; label: string; meta?: string; icon?: string }>
-  onChange: (value: string) => void
-  placeholder?: string
-  searchable?: boolean
-  icon?: string
-}) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const current = options.find(option => option.value === value)
-  const visible = searchable && query.trim()
-    ? options.filter(option => `${option.label} ${option.meta || ''}`.toLowerCase().includes(query.toLowerCase())).slice(0, 16)
-    : options.slice(0, searchable ? 16 : 80)
-
-  return (
-    <div className="gz-picker">
-      {label && <label className="gz-picker-label">{label}</label>}
-      <button
-        type="button"
-        className={`gz-picker-trigger ${open ? 'open' : ''}`}
-        onClick={() => setOpen(prev => !prev)}
-        aria-expanded={open}
-      >
-        <span className="gz-picker-trigger-content">
-          {icon && <Icon name={icon} className="gz-picker-trigger-icon" />}
-          <span className={current ? 'gz-picker-selected' : 'gz-picker-placeholder'}>
-            {current?.label || placeholder}
-          </span>
-          {current?.meta && <span className="gz-picker-meta-chip">{current.meta}</span>}
-        </span>
-        <Icon name={open ? 'chevronUp' : 'chevronDown'} className="gz-picker-arrow" />
-      </button>
-
-      {open && (
-        <>
-          <div className="gz-picker-backdrop" onClick={() => { setOpen(false); setQuery('') }} />
-          <div className="gz-picker-menu">
-            {searchable && (
-              <div className="gz-picker-search-wrap">
-                <Icon name="magnifier" className="gz-picker-search-icon" />
-                <input
-                  autoFocus
-                  className="gz-picker-search"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder="Search…"
-                />
-                {query && (
-                  <button type="button" className="gz-picker-search-clear" onClick={() => setQuery('')}>
-                    <Icon name="xmark" />
-                  </button>
-                )}
-              </div>
-            )}
-            <div className="gz-picker-options">
-              {visible.map(option => (
-                <button
-                  type="button"
-                  className={`gz-picker-option ${option.value === value ? 'selected' : ''}`}
-                  key={option.value}
-                  onClick={() => {
-                    onChange(option.value)
-                    setOpen(false)
-                    setQuery('')
-                  }}
-                >
-                  <span className="gz-picker-option-copy">
-                    <strong className="gz-picker-option-title">
-                      {option.icon && <Icon name={option.icon} style={{ marginRight: 6 }} />}
-                      {option.label}
-                    </strong>
-                    {option.meta && <small className="gz-picker-option-meta">{option.meta}</small>}
-                  </span>
-                  {option.value === value && <Icon name="check" className="gz-picker-check" />}
-                </button>
-              ))}
-              {!visible.length && <div className="gz-picker-empty">No results found</div>}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
 export default function Management() {
   const nav = useNavigate()
   const user = useStore(s => s.user)
@@ -244,11 +80,12 @@ export default function Management() {
   const [accessRequests, setAccessRequests] = useState<any[]>([])
   const [gyms, setGyms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<string>('overview')
 
   const role = (user?.admin ? 'admin' : user?.role || 'member') as PersonaRole
   const isManager = role === 'admin' || role === 'owner'
   const isCoach = isManager || role === 'trainer'
+
+  const [activeTab, setActiveTab] = useState<string>(isCoach ? 'splits' : 'overview')
 
   const [selectedMember, setSelectedMember] = useState<string>('')
   const [roleForm, setRoleForm] = useState({ memberId: '', role: 'member' as PersonaRole, gymId: '', trainerId: '' })
@@ -263,15 +100,20 @@ export default function Management() {
     foods: [
       { id: '1', name: 'Whey Protein Shake', time: '08:00', serving: '1 scoop + 300ml milk' },
       { id: '2', name: 'Chicken Breast & Jasmine Rice', time: '13:00', serving: '200g chicken + 150g rice' },
-      { id: '3', name: 'Salmon & Roasted Vegetables', time: '19:30', serving: '180g salmon + asparagus' }
-    ]
+      { id: '3', name: 'Salmon & Roasted Vegetables', time: '19:30', serving: '180g salmon + asparagus' },
+    ],
   })
   const [feeForm, setFeeForm] = useState({
     amount: '49.00',
     dueDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
     currency: 'USD',
-    note: 'Monthly Gym Access & Coaching'
+    note: 'Monthly Gym Access & Coaching',
   })
+
+  // Filters
+  const [feeStatusFilter, setFeeStatusFilter] = useState<'all' | 'submitted' | 'due' | 'approved' | 'overdue' | 'rejected'>('all')
+  const [rosterSearch, setRosterSearch] = useState('')
+  const [rosterRoleFilter, setRosterRoleFilter] = useState<'all' | 'member' | 'trainer' | 'owner' | 'admin'>('all')
 
   const members = useMemo(() => (data?.members || []).filter((m: any) => m.role === 'member'), [data])
   const selectedTrainingPlan = useMemo(
@@ -279,20 +121,26 @@ export default function Management() {
     [data, selectedMember]
   )
 
-  const routineOptions = useMemo(() => [
-    { value: '', label: 'Rest & Recovery', meta: 'Active rest / mobility', icon: 'moon' },
-    ...S.routines.map(routine => ({
-      value: routine.id,
-      label: routine.name,
-      meta: `${routine.ex?.length || 0} exercises`,
-      icon: 'dumbbell'
-    }))
-  ], [S.routines])
+  const routineOptions = useMemo(
+    () => [
+      { value: '', label: 'Rest & Recovery', icon: 'moon', subtitle: 'Active rest & recovery' },
+      ...S.routines.map(routine => ({
+        value: routine.id,
+        label: routine.name,
+        icon: 'dumbbell',
+        subtitle: `${routine.ex?.length || 0} exercises`,
+      })),
+    ],
+    [S.routines]
+  )
 
   useEffect(() => {
     const assignedWeek = selectedTrainingPlan?.week || {}
     setTrainingPlanForm({
-      week: PLAN_DAYS.reduce((week, day) => ({ ...week, [day]: assignedWeek[day] || '' }), {} as Record<number, string>)
+      week: PLAN_DAYS.reduce(
+        (week, day) => ({ ...week, [day]: assignedWeek[day] || '' }),
+        {} as Record<number, string>
+      ),
     })
   }, [selectedMember, selectedTrainingPlan?.id, selectedTrainingPlan?.updatedAt])
 
@@ -300,7 +148,7 @@ export default function Management() {
     try {
       const [next, requests] = await Promise.all([
         getManagementOverview(),
-        getAccessRequests().catch(() => ({ requests: [] }))
+        getAccessRequests().catch(() => ({ requests: [] })),
       ])
       setData(next)
       setAccessRequests(requests.requests || [])
@@ -308,11 +156,11 @@ export default function Management() {
       setRoleForm(current => ({
         ...current,
         memberId: current.memberId || next.members?.[0]?.id || '',
-        gymId: current.gymId || next.viewer?.gymId || ''
+        gymId: current.gymId || next.viewer?.gymId || '',
       }))
       setRequestForm(current => ({
         ...current,
-        gymId: current.gymId || next.viewer?.gymId || next.gyms?.[0]?.id || ''
+        gymId: current.gymId || next.viewer?.gymId || next.gyms?.[0]?.id || '',
       }))
     } catch (e: any) {
       toast(e.message || 'Could not load gym workspace')
@@ -323,7 +171,9 @@ export default function Management() {
 
   useEffect(() => {
     reload()
-    listGyms().then(result => setGyms(result.gyms || [])).catch(() => {})
+    listGyms()
+      .then(result => setGyms(result.gyms || []))
+      .catch(() => {})
   }, [])
 
   const run = async (work: () => Promise<any>, successMsg: string) => {
@@ -340,30 +190,64 @@ export default function Management() {
   const selectedMemberName = selectedMemberObj?.name || 'Trainee'
   const coachFormReady = !!selectedMember
   const todayDay = new Date().getDay()
-  const todayPlanRoutines = selectedTrainingPlan?.routines || S.routines
-  const todayRoutine = todayPlanRoutines.find((routine: any) => routine.id === trainingPlanForm.week[todayDay])
+
+  // For members: today routine
+  const myAssignedPlan = data?.trainingPlan
+  const myAssignedRoutine = myAssignedPlan
+    ? (myAssignedPlan.routines || []).find((routine: any) => routine.id === myAssignedPlan.week?.[todayDay])
+    : null
 
   const trainerOptions = useMemo(
-    () => (data?.members || []).filter((member: any) => member.role === 'trainer').map((member: any) => ({
-      value: member.id,
-      label: member.name,
-      meta: 'Trainer'
-    })),
+    () => [
+      { value: '', label: 'No trainer assigned' },
+      ...(data?.members || [])
+        .filter((member: any) => member.role === 'trainer' || member.role === 'owner' || member.admin)
+        .map((member: any) => ({
+          value: member.id,
+          label: member.name,
+          subtitle: personaLabel(member.role, member.admin),
+          icon: 'arm',
+        })),
+    ],
     [data]
   )
 
-  const pendingRequestsCount = (data?.requests?.length || 0) + accessRequests.filter((r: any) => r.status === 'pending').length
+  const memberOptions = useMemo(
+    () =>
+      (data?.members || []).map((m: any) => ({
+        value: m.id,
+        label: m.name,
+        subtitle: `${personaLabel(m.role, m.admin)}${m.gymId ? ` · Gym: ${m.gymId}` : ''}`,
+        icon: 'person',
+      })),
+    [data]
+  )
+
+  const gymOptions = useMemo(
+    () =>
+      (gyms.length ? gyms : data?.gyms || []).map((g: any) => ({
+        value: g.id,
+        label: g.name || g.id,
+        subtitle: `ID: ${g.id}`,
+        icon: 'globe',
+      })),
+    [gyms, data]
+  )
+
+  const pendingRequestsCount =
+    (data?.requests?.length || 0) + accessRequests.filter((r: any) => r.status === 'pending').length
   const pendingFeesCount = (data?.fees || []).filter((f: any) => f.status === 'submitted').length
   const totalLogsHit = (data?.logs || []).filter((l: any) => l.status === 'hit' || l.status === 'logged').length
   const totalLogsMissed = (data?.logs || []).filter((l: any) => l.status === 'missed').length
-  const complianceRate = (totalLogsHit + totalLogsMissed) > 0
-    ? Math.round((totalLogsHit / (totalLogsHit + totalLogsMissed)) * 100)
-    : 100
+  const complianceRate =
+    totalLogsHit + totalLogsMissed > 0
+      ? Math.round((totalLogsHit / (totalLogsHit + totalLogsMissed)) * 100)
+      : 100
 
   const updateFood = (id: string, patch: Partial<(typeof dietForm.foods)[0]>) =>
     setDietForm(current => ({
       ...current,
-      foods: current.foods.map(food => (food.id === id ? { ...food, ...patch } : food))
+      foods: current.foods.map(food => (food.id === id ? { ...food, ...patch } : food)),
     }))
 
   const addFood = (preset?: { name: string; serving: string; time: string }) =>
@@ -375,15 +259,15 @@ export default function Management() {
           id: crypto.randomUUID?.() || String(Date.now() + current.foods.length),
           name: preset?.name || '',
           time: preset?.time || '12:00',
-          serving: preset?.serving || ''
-        }
-      ]
+          serving: preset?.serving || '',
+        },
+      ],
     }))
 
   const removeFood = (id: string) =>
     setDietForm(current => ({
       ...current,
-      foods: current.foods.length > 1 ? current.foods.filter(food => food.id !== id) : current.foods
+      foods: current.foods.length > 1 ? current.foods.filter(food => food.id !== id) : current.foods,
     }))
 
   const applySplitPreset = (presetKey: string) => {
@@ -418,544 +302,524 @@ export default function Management() {
 
   if (loading) {
     return (
-      <div className="narrow management-page">
-        <div className="gz-hero-banner">
-          <div className="gz-hero-kicker">
-            <span className="gz-pulse-dot" /> LOADING HQ
+      <div className="narrow mgmt-page">
+        <div className="hdr" style={{ marginBottom: 16 }}>
+          <div>
+            <h1 className="t">Gym Operations</h1>
+            <div className="sub">Connecting to workspace…</div>
           </div>
-          <h1 className="gz-hero-title">Syncing Workspace…</h1>
-          <p className="gz-hero-sub">Initializing your gym dashboard and protocols.</p>
         </div>
-        <div className="card gz-loading-skeleton">
-          <div className="gz-skeleton-line gz-w-60" />
-          <div className="gz-skeleton-box" />
-          <div className="gz-skeleton-line gz-w-80" />
+        <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+          <div className="dim small">Loading gym data…</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="narrow management-page">
-      <PageBreadcrumb
-        items={[
-          { label: 'Settings', icon: 'gear', path: '/settings' },
-          { label: 'Gym Operations', icon: 'wrench' },
-        ]}
-        scope="gym"
-      />
-      
+    <div className="narrow mgmt-page" style={{ paddingBottom: 32 }}>
       <WorkspaceNav />
 
-      {/* ======================= HERO BANNER ======================= */}
-      <div className="gz-hero-banner" style={{ marginTop: 12 }}>
-        <div className="gz-hero-top">
-          <div className="gz-hero-badges">
-            <span className="gz-role-pill">
-              <span className="gz-pulse-dot" />
-              <Icon name={role === 'admin' ? 'crown' : role === 'owner' ? 'bolt' : role === 'trainer' ? 'arm' : 'shield'} />
-              <span>{personaLabel(role, role === 'admin')}</span>
-            </span>
-            {data?.viewer?.gymId && (
-              <span
-                className="gz-gym-chip"
-                onClick={() => {
-                  navigator.clipboard?.writeText(data.viewer.gymId).catch(() => {})
-                  toast(`Gym ID "${data.viewer.gymId}" copied!`)
-                }}
-                title="Click to copy Gym ID"
-              >
-                <Icon name="globe" />
-                <span>{data.viewer.gymId}</span>
-              </span>
-            )}
+      {/* Header Banner */}
+      <div className="mgmt-header-card" style={{ marginTop: 12 }}>
+        <div className="row between" style={{ alignItems: 'flex-start' }}>
+          <div>
+            <div className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 6 }}>
+              <span className="tag acc">{personaLabel(role, role === 'admin')}</span>
+              {data?.viewer?.gymId ? (
+                <span
+                  className="tag"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => {
+                    navigator.clipboard?.writeText(data.viewer.gymId).catch(() => {})
+                    toast(`Copied Gym ID: ${data.viewer.gymId}`)
+                  }}
+                  title="Click to copy Gym ID"
+                >
+                  <Icon name="globe" style={{ fontSize: 11, marginRight: 4 }} />
+                  Facility: {data.viewer.gymId}
+                </span>
+              ) : (
+                <span className="tag" style={{ color: 'var(--orange)' }}>No Gym Assigned</span>
+              )}
+            </div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 750 }}>
+              {role === 'member'
+                ? 'My Gym Portal'
+                : role === 'trainer'
+                ? 'Coach Command Center'
+                : role === 'owner'
+                ? 'Gym Operations & Ops'
+                : 'Super Admin Gym Matrix'}
+            </h1>
+            <div className="dim small" style={{ marginTop: 4 }}>
+              {role === 'member'
+                ? 'Track your assigned routine splits, daily fuel checklist, and membership dues.'
+                : 'Deploy 7-day splits, configure nutrition protocols, and manage squad dues.'}
+            </div>
           </div>
-          <div className="gz-hero-actions">
-            <button className="gz-circle-btn" onClick={reload} aria-label="Refresh Workspace" title="Refresh">
-              <Icon name="reset" />
-            </button>
-            <button className="gz-circle-btn" onClick={() => nav('/home')} aria-label="Home" title="Home">
-              <Icon name="house" />
-            </button>
-          </div>
+          <button className="iconbtn" onClick={reload} aria-label="Refresh data" title="Refresh">
+            ↻
+          </button>
         </div>
-
-        <h1 className="gz-hero-title">
-          {role === 'member'
-            ? 'My Gym Portal'
-            : role === 'trainer'
-            ? 'Coach Command'
-            : role === 'owner'
-            ? 'Gym HQ & Ops'
-            : 'Super Admin Matrix'}
-        </h1>
-        <p className="gz-hero-sub">
-          {role === 'member'
-            ? 'Track your daily training split, fuel protocol, and gym dues.'
-            : isManager
-            ? 'Orchestrate members, deploy weekly splits, review payments, and approve requests.'
-            : 'Assign personalized weekly training schedules and fuel guidelines for your squad.'}
-        </p>
       </div>
 
-      {/* ======================= BENTO STATS STRIP ======================= */}
-      <div className="gz-bento-grid">
+      {/* KPI Tiles */}
+      <div className="tiles" style={{ marginBottom: 14 }}>
         {isCoach ? (
           <>
-            <BentoStat
-              label="Trainee Squad"
-              value={members.length}
-              sub={`${(data?.trainingPlans || []).length} active plans`}
-              icon="users"
-              accent="var(--blue)"
-              trend="+Squad"
-              onClick={() => setActiveTab('workouts')}
-            />
-            <BentoStat
-              label="Compliance Rate"
-              value={`${complianceRate}%`}
-              sub={`${totalLogsHit} logged hits`}
-              icon="flame"
-              accent="var(--green)"
-              trend="🔥 Fuel"
-              onClick={() => setActiveTab('progress')}
-            />
-            <BentoStat
-              label="Action Inbox"
-              value={pendingRequestsCount + pendingFeesCount}
-              sub={`${pendingRequestsCount} req · ${pendingFeesCount} fees`}
-              icon="bell"
-              accent={pendingRequestsCount + pendingFeesCount > 0 ? 'var(--orange)' : 'var(--acc)'}
-              trend={pendingRequestsCount + pendingFeesCount > 0 ? '⚡ Action' : '✨ Clear'}
+            <div className="tile" onClick={() => setActiveTab('splits')} style={{ cursor: 'pointer' }}>
+              <div className="l">Trainees</div>
+              <div className="v">{members.length}</div>
+            </div>
+            <div className="tile" onClick={() => setActiveTab('splits')} style={{ cursor: 'pointer' }}>
+              <div className="l">Active Plans</div>
+              <div className="v" style={{ color: 'var(--acc)' }}>{(data?.trainingPlans || []).length}</div>
+            </div>
+            <div className="tile" onClick={() => setActiveTab('activity')} style={{ cursor: 'pointer' }}>
+              <div className="l">Compliance</div>
+              <div className="v" style={{ color: 'var(--green)' }}>{complianceRate}%</div>
+            </div>
+            <div
+              className="tile"
               onClick={() => setActiveTab(pendingRequestsCount > 0 ? 'inbox' : 'fees')}
-            />
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="l">Inbox Actions</div>
+              <div className="v" style={{ color: pendingRequestsCount + pendingFeesCount > 0 ? 'var(--orange)' : undefined }}>
+                {pendingRequestsCount + pendingFeesCount}
+              </div>
+            </div>
           </>
         ) : (
           <>
-            <BentoStat
-              label="Today's Split"
-              value={data?.trainingPlan ? (todayRoutine?.name || 'Recovery') : 'Self Guided'}
-              sub={todayRoutine ? `${todayRoutine.ex?.length || 0} exercises` : 'Ready to train'}
-              icon="dumbbell"
-              accent="var(--acc)"
-              trend="Today"
-              onClick={() => nav('/workout')}
-            />
-            <BentoStat
-              label="Fuel Status"
-              value={data?.diets?.length ? `${data.diets[0]?.foods?.length || 0} items` : 'Open'}
-              sub={data?.diets?.[0]?.calories ? `${data.diets[0].calories} kcal goal` : 'Nutrition logged'}
-              icon="heart"
-              accent="var(--pink)"
-              trend="Daily"
-              onClick={() => setActiveTab('nutrition')}
-            />
-            <BentoStat
-              label="Membership Dues"
-              value={(data?.fees || []).some((f: any) => f.status === 'due' || f.status === 'overdue') ? 'Due' : 'Active'}
-              sub={(data?.fees || [])[0] ? `${(data.fees)[0].amount} ${(data.fees)[0].currency}` : 'Paid up'}
-              icon="target"
-              accent="var(--blue)"
-              trend="Status"
-              onClick={() => setActiveTab('fees')}
-            />
+            <div className="tile" onClick={() => myAssignedRoutine && nav('/workout')} style={{ cursor: 'pointer' }}>
+              <div className="l">Today's Workout</div>
+              <div className="v" style={{ fontSize: '1rem', color: myAssignedRoutine ? 'var(--acc)' : undefined }}>
+                {myAssignedRoutine ? myAssignedRoutine.name : 'Rest / Open'}
+              </div>
+            </div>
+            <div className="tile" onClick={() => setActiveTab('nutrition')} style={{ cursor: 'pointer' }}>
+              <div className="l">Daily Fuel</div>
+              <div className="v">{data?.diets?.[0]?.calories ? `${data.diets[0].calories} kcal` : 'Open'}</div>
+            </div>
+            <div className="tile" onClick={() => setActiveTab('fees')} style={{ cursor: 'pointer' }}>
+              <div className="l">Dues Status</div>
+              <div
+                className="v"
+                style={{
+                  fontSize: '.95rem',
+                  color: (data?.fees || []).some((f: any) => f.status === 'due' || f.status === 'overdue')
+                    ? 'var(--orange)'
+                    : 'var(--green)',
+                }}
+              >
+                {(data?.fees || []).some((f: any) => f.status === 'due' || f.status === 'overdue') ? 'Payment Due' : 'Paid Up'}
+              </div>
+            </div>
           </>
         )}
       </div>
 
-      {/* ======================= SUB-NAV PILL TABS ======================= */}
-      <div className="gz-tab-bar">
-        <button
-          className={`gz-tab-pill ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          <Icon name="chart" />
-          <span>Overview</span>
-        </button>
-
-        {isCoach && (
-          <button
-            className={`gz-tab-pill ${activeTab === 'workouts' ? 'active' : ''}`}
-            onClick={() => setActiveTab('workouts')}
-          >
-            <Icon name="dumbbell" />
-            <span>Splits & Plans</span>
-          </button>
-        )}
-
-        <button
-          className={`gz-tab-pill ${activeTab === 'nutrition' ? 'active' : ''}`}
-          onClick={() => setActiveTab('nutrition')}
-        >
-          <Icon name="heart" />
-          <span>{role === 'member' ? 'Daily Fuel' : 'Nutrition & Fuel'}</span>
-        </button>
-
-        {(isManager || role === 'member') && (
-          <button
-            className={`gz-tab-pill ${activeTab === 'fees' ? 'active' : ''}`}
-            onClick={() => setActiveTab('fees')}
-          >
-            <Icon name="plate" />
-            <span>Fees & Dues</span>
-            {pendingFeesCount > 0 && <span className="gz-tab-badge">{pendingFeesCount}</span>}
-          </button>
-        )}
-
-        {isManager && (
-          <button
-            className={`gz-tab-pill ${activeTab === 'roster' ? 'active' : ''}`}
-            onClick={() => setActiveTab('roster')}
-          >
-            <Icon name="users" />
-            <span>Team & Roles</span>
-          </button>
-        )}
-
-        {isCoach && (
-          <button
-            className={`gz-tab-pill ${activeTab === 'progress' ? 'active' : ''}`}
-            onClick={() => setActiveTab('progress')}
-          >
-            <Icon name="flame" />
-            <span>Squad Activity</span>
-          </button>
-        )}
-
-        {(isManager || role === 'member') && (
-          <button
-            className={`gz-tab-pill ${activeTab === 'inbox' ? 'active' : ''}`}
-            onClick={() => setActiveTab('inbox')}
-          >
-            <Icon name={role === 'member' ? 'mail' : 'bell'} />
-            <span>{role === 'member' ? 'Gym Request' : 'Inbox'}</span>
-            {pendingRequestsCount > 0 && <span className="gz-tab-badge">{pendingRequestsCount}</span>}
-          </button>
+      {/* Main Tab Bar */}
+      <div className="mgmt-tab-bar" style={{ marginBottom: 14 }}>
+        {isCoach ? (
+          <>
+            <button
+              type="button"
+              className={`mgmt-tab-pill ${activeTab === 'splits' ? 'active' : ''}`}
+              onClick={() => setActiveTab('splits')}
+            >
+              <Icon name="dumbbell" />
+              <span>Splits & Plans</span>
+            </button>
+            <button
+              type="button"
+              className={`mgmt-tab-pill ${activeTab === 'nutrition' ? 'active' : ''}`}
+              onClick={() => setActiveTab('nutrition')}
+            >
+              <Icon name="heart" />
+              <span>Fuel Protocols</span>
+            </button>
+            <button
+              type="button"
+              className={`mgmt-tab-pill ${activeTab === 'fees' ? 'active' : ''}`}
+              onClick={() => setActiveTab('fees')}
+            >
+              <Icon name="plate" />
+              <span>Billing & Dues</span>
+              {pendingFeesCount > 0 && <span className="gz-tab-badge">{pendingFeesCount}</span>}
+            </button>
+            {isManager && (
+              <button
+                type="button"
+                className={`mgmt-tab-pill ${activeTab === 'roster' ? 'active' : ''}`}
+                onClick={() => setActiveTab('roster')}
+              >
+                <Icon name="users" />
+                <span>Team & Roster</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={`mgmt-tab-pill ${activeTab === 'activity' ? 'active' : ''}`}
+              onClick={() => setActiveTab('activity')}
+            >
+              <Icon name="flame" />
+              <span>Squad Activity</span>
+            </button>
+            <button
+              type="button"
+              className={`mgmt-tab-pill ${activeTab === 'inbox' ? 'active' : ''}`}
+              onClick={() => setActiveTab('inbox')}
+            >
+              <Icon name="bell" />
+              <span>Requests Queue</span>
+              {pendingRequestsCount > 0 && <span className="gz-tab-badge">{pendingRequestsCount}</span>}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className={`mgmt-tab-pill ${activeTab === 'overview' ? 'active' : ''}`}
+              onClick={() => setActiveTab('overview')}
+            >
+              <Icon name="chart" />
+              <span>Overview</span>
+            </button>
+            <button
+              type="button"
+              className={`mgmt-tab-pill ${activeTab === 'nutrition' ? 'active' : ''}`}
+              onClick={() => setActiveTab('nutrition')}
+            >
+              <Icon name="heart" />
+              <span>Daily Fuel</span>
+            </button>
+            <button
+              type="button"
+              className={`mgmt-tab-pill ${activeTab === 'fees' ? 'active' : ''}`}
+              onClick={() => setActiveTab('fees')}
+            >
+              <Icon name="plate" />
+              <span>My Dues</span>
+            </button>
+            <button
+              type="button"
+              className={`mgmt-tab-pill ${activeTab === 'inbox' ? 'active' : ''}`}
+              onClick={() => setActiveTab('inbox')}
+            >
+              <Icon name="mail" />
+              <span>Gym Access</span>
+            </button>
+          </>
         )}
       </div>
 
-      {/* ======================= TRAINEE SPOTLIGHT BAR (COACHES) ======================= */}
-      {isCoach && members.length > 0 && (activeTab === 'overview' || activeTab === 'workouts' || activeTab === 'nutrition') && (
-        <div className="gz-trainee-spotlight">
-          <div className="gz-trainee-spotlight-head">
-            <div>
-              <span className="gz-card-tag">ACTIVE TRAINEE SPOTLIGHT</span>
-              <h3 className="gz-trainee-spotlight-title">Select Member to Manage</h3>
+      {/* =========================================================================
+          TAB: OVERVIEW (FOR MEMBERS)
+         ========================================================================= */}
+      {activeTab === 'overview' && !isCoach && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Today's Focus Card */}
+          <div className="card">
+            <div className="row between" style={{ marginBottom: 8 }}>
+              <h2 style={{ margin: 0, fontSize: 16 }}>Today's Training Schedule</h2>
+              <span className="tag acc">{PLAN_DAY_LABELS[todayDay]}</span>
             </div>
-            <span className="gz-member-count-badge">{members.length} trainees</span>
+            <div style={{ padding: '8px 0' }}>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>
+                {myAssignedRoutine ? myAssignedRoutine.name : 'Self-Guided Training / Active Recovery'}
+              </div>
+              <p className="dim small" style={{ margin: '6px 0 12px', lineHeight: 1.4 }}>
+                {myAssignedRoutine
+                  ? `${myAssignedRoutine.ex?.length || 0} exercises prescribed by your coach for today.`
+                  : 'No trainer routine scheduled for today. Train freely or take a rest day.'}
+              </p>
+              {myAssignedRoutine && (
+                <Button variant="primary" size="sm" icon="play" onClick={() => nav('/workout')}>
+                  Start Workout
+                </Button>
+              )}
+            </div>
           </div>
 
-          <div className="gz-trainee-scroll-row">
-            {members.map((m: any) => {
-              const hasPlan = (data?.trainingPlans || []).some((p: any) => p.memberId === m.id)
-              const isSel = m.id === selectedMember
-              return (
-                <button
-                  type="button"
-                  key={m.id}
-                  className={`gz-trainee-card ${isSel ? 'selected' : ''}`}
-                  onClick={() => setSelectedMember(m.id)}
-                >
-                  <div className="gz-trainee-avatar">
-                    {m.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="gz-trainee-info">
-                    <strong>{m.name}</strong>
-                    <span className={`gz-trainee-plan-status ${hasPlan ? 'has-plan' : 'no-plan'}`}>
-                      {hasPlan ? '⚡ Active Plan' : '⏳ Needs Plan'}
-                    </span>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
+          {/* 7-Day Schedule Overview */}
+          {myAssignedPlan && (
+            <div className="card">
+              <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>7-Day Split Routine</h2>
+              <div className="list" style={{ gap: 4 }}>
+                {PLAN_DAYS.map(day => {
+                  const routineId = myAssignedPlan.week?.[day]
+                  const rObj = (myAssignedPlan.routines || []).find((r: any) => r.id === routineId)
+                  const isToday = day === todayDay
+                  return (
+                    <div
+                      key={day}
+                      className="row between"
+                      style={{
+                        padding: '8px 4px',
+                        borderBottom: '1px solid var(--sep)',
+                        background: isToday ? 'var(--surface-2)' : undefined,
+                        borderRadius: isToday ? 8 : 0,
+                      }}
+                    >
+                      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                        <span className="tag" style={{ width: 44, textAlign: 'center' }}>
+                          {PLAN_DAY_SHORT[day]}
+                        </span>
+                        <span style={{ fontWeight: isToday ? 700 : 500 }}>
+                          {rObj ? rObj.name : 'Rest & Recovery'}
+                        </span>
+                      </div>
+                      {isToday && <span className="tag acc">Today</span>}
+                      {rObj && !isToday && <span className="dim small">{rObj.ex?.length || 0} ex</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* =========================================================================
-          TAB CONTENT: OVERVIEW
+          TAB: SPLITS & PLANS (COACHES)
          ========================================================================= */}
-      {activeTab === 'overview' && (
-        <div className="gz-tab-content">
-          {/* Today's Focus Card for selected trainee or current user */}
-          {isCoach && coachFormReady && (
-            <SectionPanel
-              title={`Today's Focus: ${selectedMemberName}`}
-              tag={PLAN_DAY_LABELS[todayDay].toUpperCase()}
-              icon={todayRoutine ? 'dumbbell' : 'moon'}
-              glow={!!todayRoutine}
-              badge={
-                <GenZBadge variant={todayRoutine ? 'acc' : 'purple'}>
-                  {todayRoutine ? 'Workout Day' : 'Rest Day'}
-                </GenZBadge>
-              }
-            >
-              <div className="gz-today-hero-row">
-                <div className="gz-today-hero-copy">
-                  <h3>{todayRoutine?.name || (selectedTrainingPlan ? 'Rest & Recovery Protocol' : 'No weekly plan assigned')}</h3>
-                  <p>
-                    {todayRoutine
-                      ? `${todayRoutine.ex?.length || 0} exercises scheduled for today · ${todayRoutine.name}`
-                      : selectedTrainingPlan
-                      ? 'Scheduled muscle repair, light mobility, and hydration'
-                      : 'Deploy a weekly split below to give this trainee their daily workouts.'}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => setActiveTab('workouts')}
-                >
-                  Edit Split
-                </Button>
+      {isCoach && activeTab === 'splits' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Trainee Spotlight Bar */}
+          {members.length > 0 ? (
+            <div className="card" style={{ padding: 12 }}>
+              <div className="row between" style={{ marginBottom: 8 }}>
+                <span className="small muted" style={{ fontWeight: 700 }}>SELECT SQUAD TRAINEE</span>
+                <span className="tag acc">{members.length} Trainees</span>
               </div>
-            </SectionPanel>
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                {members.map((m: any) => {
+                  const isSel = m.id === selectedMember
+                  const hasPlan = (data?.trainingPlans || []).some((p: any) => p.memberId === m.id)
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`admin-filter-pill ${isSel ? 'active' : ''}`}
+                      onClick={() => setSelectedMember(m.id)}
+                      style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <span>{m.name}</span>
+                      <small style={{ opacity: 0.8 }}>{hasPlan ? '✓' : '•'}</small>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 16, textAlign: 'center' }}>
+              <div className="dim small">No trainees assigned to your squad yet. Assign members in the Roster tab.</div>
+            </div>
           )}
 
-          {/* Quick Shortcuts Bento */}
-          <div className="gz-quick-grid">
-            {isCoach && (
-              <div className="gz-quick-card" onClick={() => setActiveTab('workouts')}>
-                <div className="gz-quick-card-icon"><Icon name="calendar" /></div>
-                <h4>Weekly Splits</h4>
-                <p>Deploy 7-day routine schedules with one-tap split presets.</p>
-                <span className="gz-quick-link">Configure Split →</span>
+          {/* Weekly Split Matrix */}
+          <div className="card">
+            <div className="row between" style={{ marginBottom: 10 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 16 }}>7-Day Weekly Split</h2>
+                <div className="small muted" style={{ marginTop: 2 }}>
+                  Assign daily routines to <strong>{selectedMemberName}</strong>
+                </div>
               </div>
-            )}
-            <div className="gz-quick-card" onClick={() => setActiveTab('nutrition')}>
-              <div className="gz-quick-card-icon"><Icon name="heart" /></div>
-              <h4>Fuel & Macros</h4>
-              <p>Daily calorie targets, macro splits, and interactive meal checklist.</p>
-              <span className="gz-quick-link">View Nutrition →</span>
+              {selectedTrainingPlan && (
+                <span className="tag">
+                  Updated {prettyDate(selectedTrainingPlan.updatedAt || selectedTrainingPlan.created)}
+                </span>
+              )}
             </div>
-            {isManager && (
-              <div className="gz-quick-card" onClick={() => setActiveTab('fees')}>
-                <div className="gz-quick-card-icon"><Icon name="target" /></div>
-                <h4>Billing & Dues</h4>
-                <p>Create invoices, set due dates, and verify member payment proofs.</p>
-                <span className="gz-quick-link">Manage Dues →</span>
+
+            {/* Split Presets */}
+            <div style={{ marginBottom: 12 }}>
+              <div className="small muted" style={{ marginBottom: 6 }}>Templates:</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <Button size="xs" variant="secondary" onClick={() => applySplitPreset('ppl')}>
+                  Push / Pull / Legs
+                </Button>
+                <Button size="xs" variant="secondary" onClick={() => applySplitPreset('upperlower')}>
+                  Upper / Lower (4d)
+                </Button>
+                <Button size="xs" variant="secondary" onClick={() => applySplitPreset('fullbody')}>
+                  Full Body (3d)
+                </Button>
+                <Button size="xs" variant="ghost" onClick={() => applySplitPreset('clear')}>
+                  Clear to Rest
+                </Button>
               </div>
-            )}
-            {isManager && (
-              <div className="gz-quick-card" onClick={() => setActiveTab('roster')}>
-                <div className="gz-quick-card-icon"><Icon name="users" /></div>
-                <h4>Squad Roster</h4>
-                <p>Promote trainers, assign trainees, and manage gym passkeys.</p>
-                <span className="gz-quick-link">Open Roster →</span>
-              </div>
-            )}
+            </div>
+
+            {/* 7 Days List with SelectButtons */}
+            <div className="list" style={{ gap: 8, marginBottom: 14 }}>
+              {PLAN_DAYS.map(day => {
+                const isToday = day === todayDay
+                const routineId = trainingPlanForm.week[day]
+                return (
+                  <div
+                    key={day}
+                    style={{
+                      padding: 10,
+                      borderRadius: 10,
+                      background: 'var(--surface-2)',
+                      border: isToday ? '1px solid var(--acc-line)' : '1px solid var(--sep-op)',
+                    }}
+                  >
+                    <div className="row between" style={{ marginBottom: 6 }}>
+                      <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontWeight: 700, fontSize: 13 }}>{PLAN_DAY_LABELS[day]}</span>
+                        {isToday && <span className="tag acc" style={{ fontSize: 10 }}>Today</span>}
+                      </div>
+                    </div>
+                    <SelectButton
+                      value={routineId}
+                      onChange={val =>
+                        setTrainingPlanForm(cur => ({
+                          ...cur,
+                          week: { ...cur.week, [day]: val },
+                        }))
+                      }
+                      options={routineOptions}
+                      placeholder="Rest & Recovery"
+                      title={`${PLAN_DAY_LABELS[day]} Routine`}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+
+            <Button
+              variant="primary"
+              size="sm"
+              icon="check"
+              disabled={!coachFormReady || !Object.values(trainingPlanForm.week).some(Boolean)}
+              onClick={() =>
+                run(
+                  () =>
+                    createTrainingPlan({
+                      memberId: selectedMember,
+                      routines: S.routines,
+                      week: trainingPlanForm.week,
+                    }),
+                  `Weekly split deployed to ${selectedMemberName}!`
+                )
+              }
+            >
+              Deploy Split to {selectedMemberName}
+            </Button>
           </div>
         </div>
       )}
 
       {/* =========================================================================
-          TAB CONTENT: WORKOUTS & SPLITS (COACHES)
+          TAB: NUTRITION & FUEL
          ========================================================================= */}
-      {isCoach && (activeTab === 'workouts' || activeTab === 'overview') && (
-        <div className={activeTab === 'overview' ? '' : 'gz-tab-content'}>
-          <SectionPanel
-            title="Weekly Training Split"
-            tag="7-DAY PROTOCOL"
-            icon="calendar"
-            glow={true}
-            badge={
-              selectedTrainingPlan ? (
-                <GenZBadge variant="acc">
-                  Updated {prettyDate(selectedTrainingPlan.updatedAt || selectedTrainingPlan.created)}
-                </GenZBadge>
-              ) : null
-            }
-          >
-            <p className="gz-help-text">
-              Assign routines from your library to each day of the week for <strong>{selectedMemberName}</strong>.
-            </p>
-
-            {!S.routines.length ? (
-              <div className="gz-empty-card">
-                <Icon name="dumbbell" className="gz-empty-icon" />
-                <h4>No routines found in your library</h4>
-                <p>Build custom routines in your Plan tab before assigning weekly splits to trainees.</p>
-                <Button size="sm" variant="primary" onClick={() => nav('/plan')}>
-                  Create Routines in Plan
-                </Button>
-              </div>
-            ) : (
-              <>
-                {/* One-Tap Split Presets */}
-                <div className="gz-preset-bar">
-                  <span className="gz-preset-label">⚡ Rapid Split Presets:</span>
-                  <div className="gz-preset-chips">
-                    <button type="button" className="gz-chip-btn" onClick={() => applySplitPreset('ppl')}>
-                      🔥 Push / Pull / Legs
-                    </button>
-                    <button type="button" className="gz-chip-btn" onClick={() => applySplitPreset('upperlower')}>
-                      💪 Upper / Lower
-                    </button>
-                    <button type="button" className="gz-chip-btn" onClick={() => applySplitPreset('fullbody')}>
-                      ✨ Full Body 3x
-                    </button>
-                    <button type="button" className="gz-chip-btn muted" onClick={() => applySplitPreset('clear')}>
-                      🌙 Clear to Rest
-                    </button>
+      {activeTab === 'nutrition' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {isCoach ? (
+            <div className="card">
+              <div className="row between" style={{ marginBottom: 10 }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 16 }}>Fuel & Nutrition Protocol</h2>
+                  <div className="small muted" style={{ marginTop: 2 }}>
+                    Trainee: <strong>{selectedMemberName}</strong>
                   </div>
                 </div>
+              </div>
 
-                {/* 7-Day Interactive Matrix */}
-                <div className="gz-days-grid">
-                  {PLAN_DAYS.map(day => {
-                    const isToday = day === todayDay
-                    const assignedRoutineId = trainingPlanForm.week[day]
-                    const routineObj = S.routines.find(r => r.id === assignedRoutineId)
-                    return (
-                      <div className={`gz-day-card ${isToday ? 'today' : ''} ${assignedRoutineId ? 'has-routine' : 'rest'}`} key={day}>
-                        <div className="gz-day-card-header">
-                          <span className="gz-day-short">{PLAN_DAY_SHORT[day]}</span>
-                          <span className="gz-day-name">{PLAN_DAY_LABELS[day]}</span>
-                          {isToday && <span className="gz-today-indicator">TODAY</span>}
-                        </div>
-                        <div className="gz-day-card-body">
-                          <CustomPicker
-                            value={assignedRoutineId}
-                            onChange={routineId =>
-                              setTrainingPlanForm(current => ({
-                                ...current,
-                                week: { ...current.week, [day]: routineId }
-                              }))
-                            }
-                            options={routineOptions}
-                            placeholder="Rest & Recovery"
-                            icon={assignedRoutineId ? 'dumbbell' : 'moon'}
-                          />
-                        </div>
-                        {routineObj && (
-                          <div className="gz-day-card-footer">
-                            <span className="gz-day-stat-chip">
-                              <Icon name="flame" /> {routineObj.ex?.length || 0} exercises
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="gz-card-actions">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon="check"
-                    disabled={!coachFormReady || !Object.values(trainingPlanForm.week).some(Boolean)}
-                    onClick={() =>
-                      run(
-                        () =>
-                          createTrainingPlan({
-                            memberId: selectedMember,
-                            routines: S.routines,
-                            week: trainingPlanForm.week
-                          }),
-                        `Weekly split deployed to ${selectedMemberName}!`
-                      )
-                    }
-                  >
-                    Deploy Split to {selectedMemberName}
-                  </Button>
-                </div>
-              </>
-            )}
-          </SectionPanel>
-        </div>
-      )}
-
-      {/* =========================================================================
-          TAB CONTENT: NUTRITION & DAILY FUEL
-         ========================================================================= */}
-      {(activeTab === 'nutrition' || (activeTab === 'overview' && role === 'member')) && (
-        <div className={activeTab === 'overview' ? '' : 'gz-tab-content'}>
-          {isCoach ? (
-            <SectionPanel
-              title={`Fuel Protocol: ${selectedMemberName}`}
-              tag="NUTRITION & MACROS"
-              icon="heart"
-              glow={true}
-              badge={<GenZBadge variant="pink">Target: {dietForm.calories || '2400'} kcal</GenZBadge>}
-            >
-              <p className="gz-help-text">
-                Build a tailored daily nutrition protocol and meal checklist for <strong>{selectedMemberName}</strong>.
-              </p>
-
-              <div className="gz-form-2col">
-                <label className="gz-form-label">
-                  Protocol Title
+              <div className="form-grid-2" style={{ marginBottom: 12 }}>
+                <div>
+                  <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                    Protocol Title
+                  </label>
                   <TextField
                     value={dietForm.title}
                     onChange={e => setDietForm({ ...dietForm, title: e.target.value })}
-                    placeholder="e.g. Lean Bulk Protocol 2.0"
+                    placeholder="e.g. Daily High Protein Target"
                   />
-                </label>
-                <label className="gz-form-label">
-                  Daily Calorie Target (kcal)
+                </div>
+                <div>
+                  <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                    Target (kcal)
+                  </label>
                   <TextField
                     value={dietForm.calories}
                     onChange={e => setDietForm({ ...dietForm, calories: e.target.value })}
-                    inputMode="numeric"
-                    placeholder="e.g. 2600"
+                    placeholder="2400"
                   />
-                </label>
+                </div>
               </div>
 
-              {/* Quick Meal Suggestion Chips */}
-              <div className="gz-preset-bar" style={{ marginTop: 12 }}>
-                <span className="gz-preset-label">🥑 Quick Food Adds:</span>
-                <div className="gz-preset-chips">
+              {/* Quick food adds */}
+              <div style={{ marginBottom: 12 }}>
+                <div className="small muted" style={{ marginBottom: 6 }}>Quick Add Presets:</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {FOOD_PRESETS.map((preset, idx) => (
-                    <button
-                      type="button"
-                      key={idx}
-                      className="gz-chip-btn"
-                      onClick={() => addFood(preset)}
-                    >
+                    <Button key={idx} size="xs" variant="secondary" onClick={() => addFood(preset)}>
                       + {preset.name}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
 
-              {/* Interactive Meal Checklist Builder */}
-              <div className="gz-food-builder-card">
-                <div className="gz-food-builder-header">
-                  <span className="gz-food-builder-title">DAILY MEAL CHECKLIST ({dietForm.foods.length} items)</span>
+              {/* Meal checklist builder */}
+              <div className="card" style={{ background: 'var(--surface-2)', padding: 12, marginBottom: 12 }}>
+                <div className="row between" style={{ marginBottom: 8 }}>
+                  <span className="small muted" style={{ fontWeight: 700 }}>
+                    DAILY MEAL ITEMS ({dietForm.foods.length})
+                  </span>
                   <Button size="xs" variant="ghost" icon="plus" onClick={() => addFood()}>
-                    Add Custom Food
+                    Add Meal
                   </Button>
                 </div>
 
-                <div className="gz-food-rows">
-                  {dietForm.foods.map((food, i) => (
-                    <div className="gz-food-row" key={food.id}>
-                      <span className="gz-food-num">0{i + 1}</span>
+                <div className="list" style={{ gap: 8 }}>
+                  {dietForm.foods.map(food => (
+                    <div
+                      key={food.id}
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 6,
+                        alignItems: 'center',
+                        padding: 8,
+                        borderRadius: 8,
+                        background: 'var(--surface)',
+                        border: '1px solid var(--sep-op)',
+                      }}
+                    >
                       <input
-                        className="field gz-food-field-time"
+                        className="field"
                         type="time"
                         value={food.time}
                         onChange={e => updateFood(food.id, { time: e.target.value })}
+                        style={{ width: 85, height: 34, fontSize: 12, flex: 'none' }}
                       />
                       <input
-                        className="field gz-food-field-name"
+                        className="field"
                         value={food.name}
                         onChange={e => updateFood(food.id, { name: e.target.value })}
-                        placeholder="Food / Meal description"
+                        placeholder="Food / meal"
+                        style={{ height: 34, fontSize: 13, flex: '1 1 120px' }}
                       />
                       <input
-                        className="field gz-food-field-serving"
+                        className="field"
                         value={food.serving}
                         onChange={e => updateFood(food.id, { serving: e.target.value })}
-                        placeholder="Portion / grams"
+                        placeholder="Portion"
+                        style={{ height: 34, fontSize: 13, flex: '1 1 100px' }}
                       />
                       <button
                         type="button"
-                        className="iconbtn gz-food-remove-btn"
+                        className="iconbtn"
                         onClick={() => removeFood(food.id)}
-                        aria-label="Remove item"
+                        style={{ width: 32, height: 32, color: 'var(--red)', flex: 'none' }}
+                        aria-label="Remove food"
                       >
                         <Icon name="xmark" />
                       </button>
@@ -964,163 +828,257 @@ export default function Management() {
                 </div>
               </div>
 
-              <div className="gz-form-2col" style={{ marginTop: 14 }}>
-                <label className="gz-form-label">
-                  Macro Guidelines & Meal Timing
+              <div className="form-grid-2" style={{ marginBottom: 12 }}>
+                <div>
+                  <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                    Macro Guidelines
+                  </label>
                   <TextArea
                     value={dietForm.meals}
                     onChange={e => setDietForm({ ...dietForm, meals: e.target.value })}
-                    placeholder="e.g. 180g Protein, 250g Carbs, 65g Fats. Meal 1 within 1h of waking."
+                    placeholder="e.g. 180g Protein, 200g Carbs, 60g Fats"
+                    rows={2}
                   />
-                </label>
-                <label className="gz-form-label">
-                  Coach Guidance & Allergy Notes
+                </div>
+                <div>
+                  <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                    Coach Guidance
+                  </label>
                   <TextArea
                     value={dietForm.notes}
                     onChange={e => setDietForm({ ...dietForm, notes: e.target.value })}
-                    placeholder="e.g. Lactose intolerant; swap whey with plant isolate. Drink 3L water."
+                    placeholder="e.g. Hydrate with 3-4L water daily"
+                    rows={2}
                   />
-                </label>
+                </div>
               </div>
 
-              <div className="gz-card-actions">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon="heart"
-                  disabled={!coachFormReady || !dietForm.title || !dietForm.foods.some(food => food.name.trim())}
-                  onClick={() =>
-                    run(
-                      () => createDiet({ memberId: selectedMember, ...dietForm }),
-                      `Diet protocol deployed to ${selectedMemberName}!`
-                    )
-                  }
-                >
-                  Deploy Nutrition Protocol
-                </Button>
-              </div>
-            </SectionPanel>
-          ) : (
-            /* Member Nutrition View */
-            <div className="gz-member-diet-section">
-              <MemberRecords
-                data={data}
-                onSubmitFee={id => run(() => submitFee(id), 'Payment submitted for review')}
-                onLog={(type, id, status, itemId) =>
+              <Button
+                variant="primary"
+                size="sm"
+                icon="heart"
+                disabled={!coachFormReady || !dietForm.title || !dietForm.foods.some(food => food.name.trim())}
+                onClick={() =>
                   run(
-                    () => logAssignment(type, id, status, undefined, undefined, itemId),
-                    status === 'hit' || status === 'logged' ? 'Progress logged!' : 'Marked missed'
+                    () => createDiet({ memberId: selectedMember, ...dietForm }),
+                    `Nutrition protocol deployed to ${selectedMemberName}!`
                   )
                 }
-              />
+              >
+                Deploy Protocol to {selectedMemberName}
+              </Button>
+            </div>
+          ) : (
+            /* Member interactive diet checklist */
+            <div className="card">
+              <div className="row between" style={{ marginBottom: 10 }}>
+                <h2 style={{ margin: 0, fontSize: 16 }}>My Daily Nutrition Checklist</h2>
+                {data?.diets?.[0]?.calories && <span className="tag acc">{data.diets[0].calories} kcal</span>}
+              </div>
+
+              {data?.diets?.length ? (
+                data.diets.map((diet: any) => (
+                  <div key={diet.id}>
+                    <div style={{ fontWeight: 650, fontSize: 15, marginBottom: 4 }}>{diet.title}</div>
+                    <div className="dim small" style={{ marginBottom: 12 }}>
+                      {diet.notes || 'Follow your daily nutrition guidelines below:'}
+                    </div>
+
+                    <div className="list" style={{ gap: 6 }}>
+                      {(diet.foods || []).map((food: any) => {
+                        const checked = (data.logs || []).some(
+                          (log: any) =>
+                            log.assignmentId === diet.id &&
+                            log.itemId === food.id &&
+                            log.status === 'logged'
+                        )
+                        return (
+                          <div
+                            key={food.id}
+                            className="card small"
+                            style={{
+                              padding: '10px 12px',
+                              background: checked ? 'var(--surface-3)' : 'var(--surface-2)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              cursor: 'pointer',
+                              border: checked ? '1px solid var(--acc)' : undefined,
+                            }}
+                            onClick={() =>
+                              run(
+                                () =>
+                                  logAssignment('diet', diet.id, checked ? 'missed' : 'logged', undefined, undefined, food.id),
+                                checked ? 'Unmarked item' : 'Logged item complete!'
+                              )
+                            }
+                          >
+                            <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+                              <div
+                                style={{
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: 6,
+                                  border: '2px solid var(--acc)',
+                                  background: checked ? 'var(--acc)' : 'transparent',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: 'var(--on-acc)',
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {checked && '✓'}
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: 600, textDecoration: checked ? 'line-through' : 'none' }}>
+                                  {food.name}
+                                </div>
+                                <div className="dim small" style={{ fontSize: '.76rem' }}>
+                                  {food.time} {food.serving ? `· ${food.serving}` : ''}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="dim small">No nutrition protocol assigned by your coach yet.</div>
+              )}
             </div>
           )}
         </div>
       )}
 
       {/* =========================================================================
-          TAB CONTENT: FEES & MEMBERSHIP DUES
+          TAB: FEES & DUES
          ========================================================================= */}
-      {(activeTab === 'fees' || (activeTab === 'overview' && isManager)) && (
-        <div className={activeTab === 'overview' ? '' : 'gz-tab-content'}>
+      {activeTab === 'fees' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {isManager && (
-            <SectionPanel
-              title="Membership Fees & Dues"
-              tag="FINANCIALS & INVOICING"
-              icon="plate"
-              badge={<GenZBadge variant="orange">{(data?.fees || []).length} Invoices</GenZBadge>}
-            >
-              <p className="gz-help-text">
-                Generate membership dues for trainees and approve proof of payment submissions.
-              </p>
+            <div className="card">
+              <div className="row between" style={{ marginBottom: 10 }}>
+                <h2 style={{ margin: 0, fontSize: 16 }}>Issue Membership Fee</h2>
+                <span className="tag">Invoicing</span>
+              </div>
 
-              <div className="gz-form-grid-4">
-                <CustomPicker
+              <div className="form-grid-4" style={{ marginBottom: 10 }}>
+                <SelectButton
                   label="Trainee"
                   value={selectedMember}
                   onChange={setSelectedMember}
+                  options={members.map((m: any) => ({
+                    value: m.id,
+                    label: m.name,
+                    icon: 'person',
+                  }))}
                   placeholder="Select Trainee"
-                  options={members.map((m: any) => ({ value: m.id, label: m.name }))}
-                  icon="person"
+                  searchable={true}
                 />
-                <label className="gz-form-label">
-                  Amount
+                <div>
+                  <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>Amount</label>
                   <input
                     className="field"
                     type="number"
-                    min="0"
-                    step="0.01"
                     value={feeForm.amount}
                     onChange={e => setFeeForm({ ...feeForm, amount: e.target.value })}
-                    placeholder="49.00"
+                    style={{ minHeight: 38 }}
                   />
-                </label>
-                <label className="gz-form-label">
-                  Due Date
+                </div>
+                <div>
+                  <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>Due Date</label>
                   <input
                     className="field"
                     type="date"
                     value={feeForm.dueDate}
                     onChange={e => setFeeForm({ ...feeForm, dueDate: e.target.value })}
+                    style={{ minHeight: 38 }}
                   />
-                </label>
-                <label className="gz-form-label">
-                  Currency
+                </div>
+                <div>
+                  <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>Currency</label>
                   <input
                     className="field"
                     value={feeForm.currency}
                     onChange={e => setFeeForm({ ...feeForm, currency: e.target.value.toUpperCase() })}
-                    maxLength={6}
+                    style={{ minHeight: 38 }}
                   />
-                </label>
+                </div>
               </div>
 
-              <label className="gz-form-label" style={{ marginTop: 10 }}>
-                Invoice Memo / Plan Note
+              <div style={{ marginBottom: 12 }}>
+                <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>Plan Note / Memo</label>
                 <TextField
                   value={feeForm.note}
                   onChange={e => setFeeForm({ ...feeForm, note: e.target.value })}
-                  placeholder="e.g. Monthly Unlimited Gym + 1-on-1 Coaching"
+                  placeholder="e.g. Monthly Unlimited Gym + Coaching"
                 />
-              </label>
-
-              <div className="gz-card-actions">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon="plus"
-                  disabled={!selectedMember || !feeForm.amount || !feeForm.dueDate}
-                  onClick={() => run(() => createFee({ memberId: selectedMember, ...feeForm }), 'Invoice created!')}
-                >
-                  Create Membership Fee
-                </Button>
               </div>
 
-              {/* Invoices List */}
-              <div className="gz-records-container" style={{ marginTop: 20 }}>
-                <h4 className="gz-subheading">INVOICE ROSTER</h4>
-                {(data?.fees || []).length ? (
-                  <div className="gz-invoice-list">
-                    {(data?.fees || []).map((fee: any) => {
+              <Button
+                variant="primary"
+                size="sm"
+                icon="plus"
+                disabled={!selectedMember || !feeForm.amount || !feeForm.dueDate}
+                onClick={() => run(() => createFee({ memberId: selectedMember, ...feeForm }), 'Invoice created!')}
+              >
+                Create Invoice
+              </Button>
+
+              {/* Invoice Roster */}
+              <div style={{ marginTop: 20 }}>
+                <div className="row between" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                  <h4 className="sec" style={{ margin: 0 }}>Invoice Roster</h4>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {(['all', 'submitted', 'due', 'approved', 'overdue', 'rejected'] as const).map(st => (
+                      <button
+                        key={st}
+                        type="button"
+                        className={`admin-filter-pill ${feeStatusFilter === st ? 'active' : ''}`}
+                        onClick={() => setFeeStatusFilter(st)}
+                        style={{ fontSize: 11, padding: '2px 8px' }}
+                      >
+                        {st === 'all' ? 'All' : st === 'submitted' ? 'Review Needed' : st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="list" style={{ gap: 6 }}>
+                  {(data?.fees || [])
+                    .filter((f: any) => feeStatusFilter === 'all' || f.status === feeStatusFilter)
+                    .map((fee: any) => {
                       const memberName = members.find((m: any) => m.id === fee.memberId)?.name || fee.memberId
                       return (
-                        <div className="gz-invoice-card" key={fee.id}>
-                          <div className="gz-invoice-avatar">
-                            {memberName.slice(0, 2).toUpperCase()}
-                          </div>
-                          <div className="gz-invoice-copy">
-                            <strong>{memberName}</strong>
-                            <span>
+                        <div
+                          key={fee.id}
+                          className="card small"
+                          style={{
+                            padding: '10px 12px',
+                            background: 'var(--surface-2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 650 }}>{memberName}</div>
+                            <div className="dim small" style={{ fontSize: '.76rem' }}>
                               {fee.amount} {fee.currency} · Due {prettyDate(fee.dueDate)}
-                            </span>
-                            {fee.note && <small>{fee.note}</small>}
+                              {fee.note ? ` · ${fee.note}` : ''}
+                            </div>
                           </div>
-                          <div className="gz-invoice-actions">
-                            <span className={`gz-status-tag status-${fee.status}`}>
-                              {fee.status === 'submitted' ? '⚡ Review Needed' : fee.status}
+                          <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                            <span className="tag" style={{ textTransform: 'capitalize' }}>
+                              {fee.status === 'submitted' ? 'Review Needed' : fee.status}
                             </span>
                             {fee.status === 'submitted' && (
-                              <div className="row" style={{ gap: 6 }}>
+                              <div className="row" style={{ gap: 4 }}>
                                 <Button
                                   size="xs"
                                   variant="primary"
@@ -1141,132 +1099,250 @@ export default function Management() {
                         </div>
                       )
                     })}
-                  </div>
-                ) : (
-                  <div className="gz-empty-card">
-                    <Icon name="plate" className="gz-empty-icon" />
-                    <p>No membership fees issued yet.</p>
-                  </div>
-                )}
+                  {!(data?.fees || []).filter((f: any) => feeStatusFilter === 'all' || f.status === feeStatusFilter).length && (
+                    <div className="dim small" style={{ padding: '8px 0', textAlign: 'center' }}>
+                      No invoices in this status.
+                    </div>
+                  )}
+                </div>
               </div>
-            </SectionPanel>
+            </div>
           )}
 
           {role === 'member' && (
-            <MemberRecords
-              data={data}
-              onSubmitFee={id => run(() => submitFee(id), 'Payment submitted for review')}
-              onLog={(type, id, status, itemId) =>
-                run(
-                  () => logAssignment(type, id, status, undefined, undefined, itemId),
-                  status === 'hit' || status === 'logged' ? 'Progress logged!' : 'Marked missed'
-                )
-              }
-            />
+            <div className="card">
+              <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>My Membership Dues</h2>
+              <div className="list" style={{ gap: 6 }}>
+                {(data?.fees || []).map((fee: any) => (
+                  <div
+                    key={fee.id}
+                    className="card small"
+                    style={{
+                      padding: '10px 12px',
+                      background: 'var(--surface-2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700 }}>
+                        {fee.amount} {fee.currency}
+                      </div>
+                      <div className="dim small" style={{ fontSize: '.76rem' }}>
+                        Due {prettyDate(fee.dueDate)} · {fee.note || 'Membership'}
+                      </div>
+                    </div>
+                    <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                      <span className="tag" style={{ textTransform: 'capitalize' }}>
+                        {fee.status}
+                      </span>
+                      {['due', 'overdue', 'rejected'].includes(fee.status) && (
+                        <Button size="xs" variant="primary" onClick={() => run(() => submitFee(fee.id), 'Payment submitted for review')}>
+                          Mark Paid
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {!(data?.fees || []).length && (
+                  <div className="dim small" style={{ textAlign: 'center', padding: '8px 0' }}>
+                    No dues or invoices pending.
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
 
       {/* =========================================================================
-          TAB CONTENT: TEAM & ROLES (MANAGERS)
+          TAB: TEAM & ROSTER (MANAGERS)
          ========================================================================= */}
-      {isManager && (activeTab === 'roster' || (activeTab === 'overview' && role === 'admin')) && (
-        <div className={activeTab === 'overview' ? '' : 'gz-tab-content'}>
-          <SectionPanel
-            title="Team & Role Assignments"
-            tag="ROSTER MANAGEMENT"
-            icon="personCircle"
-            badge={<GenZBadge variant="purple">{(data?.members || []).length} Members</GenZBadge>}
-          >
-            <p className="gz-help-text">
-              Assign roles, connect gym members with personal trainers, and manage squad permissions.
-            </p>
+      {isManager && activeTab === 'roster' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="card">
+            <div className="row between" style={{ marginBottom: 10 }}>
+              <h2 style={{ margin: 0, fontSize: 16 }}>Team & Role Assignments</h2>
+              <span className="tag acc">{(data?.members || []).length} Members</span>
+            </div>
 
-            <div className="gz-form-grid-2">
-              <CustomPicker
+            {/* Role Config Form */}
+            <div className="form-grid-2" style={{ marginBottom: 12 }}>
+              <SelectButton
                 label="Person"
                 value={roleForm.memberId}
-                onChange={memberId => setRoleForm({ ...roleForm, memberId, trainerId: '' })}
-                placeholder="Choose a user"
-                options={(data?.members || []).map((m: any) => ({
-                  value: m.id,
-                  label: m.name,
-                  meta: personaLabel(m.role)
-                }))}
-                icon="person"
+                onChange={val => setRoleForm({ ...roleForm, memberId: val, trainerId: '' })}
+                options={memberOptions}
+                placeholder="Choose user"
+                searchable={true}
               />
-              <CustomPicker
+              <SelectButton
                 label="Role"
                 value={roleForm.role}
-                onChange={nextRole => setRoleForm({ ...roleForm, role: nextRole as PersonaRole })}
+                onChange={val => setRoleForm({ ...roleForm, role: val as PersonaRole })}
                 options={roles
                   .filter(value => role === 'admin' || value === 'member' || value === 'trainer')
-                  .map(value => ({ value, label: personaLabel(value, value === 'admin') }))}
-                icon="crown"
+                  .map(val => ({
+                    value: val,
+                    label: personaLabel(val, val === 'admin'),
+                    icon: val === 'admin' ? 'crown' : val === 'owner' ? 'bolt' : val === 'trainer' ? 'arm' : 'person',
+                  }))}
+                placeholder="Select role"
               />
-              <label className="gz-form-label">
-                Gym ID
+              <div>
+                <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                  Gym Facility ID
+                </label>
                 <input
                   className="field"
                   value={roleForm.gymId}
                   onChange={e => setRoleForm({ ...roleForm, gymId: e.target.value })}
                   placeholder="e.g. downtown"
+                  style={{ minHeight: 38 }}
                 />
-              </label>
+              </div>
+
               {roleForm.role === 'member' && (
-                <CustomPicker
-                  label="Assigned Trainer"
+                <SelectButton
+                  label="Assigned Coach"
                   value={roleForm.trainerId}
-                  onChange={trainerId => setRoleForm({ ...roleForm, trainerId })}
+                  onChange={val => setRoleForm({ ...roleForm, trainerId: val })}
+                  options={trainerOptions}
                   placeholder="No trainer assigned"
-                  options={[{ value: '', label: 'No trainer assigned' }, ...trainerOptions]}
-                  icon="arm"
                 />
               )}
             </div>
 
-            <div className="gz-card-actions">
-              <Button
-                variant="primary"
-                size="sm"
-                icon="check"
-                disabled={!roleForm.memberId || !roleForm.gymId}
-                onClick={() =>
-                  run(
-                    () =>
-                      api('/api/admin/user/role', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                          id: roleForm.memberId,
-                          role: roleForm.role,
-                          gymId: roleForm.gymId,
-                          trainerId: roleForm.trainerId || null
-                        })
+            <Button
+              variant="primary"
+              size="sm"
+              icon="check"
+              disabled={!roleForm.memberId || !roleForm.gymId}
+              onClick={() =>
+                run(
+                  () =>
+                    api('/api/admin/user/role', {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        id: roleForm.memberId,
+                        role: roleForm.role,
+                        gymId: roleForm.gymId,
+                        trainerId: roleForm.trainerId || null,
                       }),
-                    'Role and trainer configuration saved!'
-                  )
-                }
-              >
-                Save Role Assignment
-              </Button>
-            </div>
-          </SectionPanel>
-
-          {/* Admin Gym Creator */}
-          {role === 'admin' && (
-            <SectionPanel
-              title="Create New Gym Hub"
-              tag="FACILITY DIRECTORY"
-              icon="plusCircle"
+                    }),
+                  'Role and trainer configuration saved!'
+                )
+              }
             >
-              <p className="gz-help-text">
-                Establish a new gym identifier to assign owners and squad members.
-              </p>
-              <div className="gz-inline-form">
+              Save Assignment
+            </Button>
+
+            {/* Squad Directory */}
+            <div style={{ marginTop: 20 }}>
+              <div className="row between" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                <h4 className="sec" style={{ margin: 0 }}>Squad Directory</h4>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {(['all', 'trainer', 'member', 'owner', 'admin'] as const).map(rf => (
+                    <button
+                      key={rf}
+                      type="button"
+                      className={`admin-filter-pill ${rosterRoleFilter === rf ? 'active' : ''}`}
+                      onClick={() => setRosterRoleFilter(rf)}
+                      style={{ fontSize: 11, padding: '2px 8px' }}
+                    >
+                      {rf === 'all' ? 'All' : personaLabel(rf, rf === 'admin')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 8 }}>
+                <TextField
+                  value={rosterSearch}
+                  onChange={e => setRosterSearch(e.target.value)}
+                  placeholder="Search squad by name or ID…"
+                  style={{ height: 34, fontSize: 13 }}
+                />
+              </div>
+
+              <div className="list" style={{ gap: 6 }}>
+                {(data?.members || [])
+                  .filter((m: any) => {
+                    if (rosterRoleFilter !== 'all' && m.role !== rosterRoleFilter) return false
+                    if (rosterSearch.trim()) {
+                      const q = rosterSearch.toLowerCase()
+                      return (m.name || '').toLowerCase().includes(q) || (m.id || '').toLowerCase().includes(q)
+                    }
+                    return true
+                  })
+                  .map((m: any) => {
+                    const assignedCoach = (data?.members || []).find((c: any) => c.id === m.trainerId)
+                    return (
+                      <div
+                        key={m.id}
+                        className="card small"
+                        style={{
+                          padding: '8px 12px',
+                          background: 'var(--surface-2)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 650 }}>{m.name}</div>
+                          <div className="row" style={{ gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
+                            <span className="tag acc" style={{ fontSize: 10 }}>
+                              {personaLabel(m.role, m.admin)}
+                            </span>
+                            {m.gymId && (
+                              <span className="tag" style={{ fontSize: 10 }}>
+                                Gym: {m.gymId}
+                              </span>
+                            )}
+                            {assignedCoach && (
+                              <span className="tag" style={{ fontSize: 10 }}>
+                                Coach: {assignedCoach.name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => {
+                            setRoleForm({
+                              memberId: m.id,
+                              role: m.role || 'member',
+                              gymId: m.gymId || data?.viewer?.gymId || '',
+                              trainerId: m.trainerId || '',
+                            })
+                            toast(`Selected ${m.name} for editing above`)
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          </div>
+
+          {/* Admin Gym Hub Creator */}
+          {role === 'admin' && (
+            <div className="card">
+              <h2 style={{ margin: '0 0 8px', fontSize: 16 }}>Create Gym Facility Hub</h2>
+              <div className="row" style={{ gap: 8, marginBottom: 10 }}>
                 <TextField
                   value={gymName}
                   onChange={e => setGymName(e.target.value)}
-                  placeholder="Gym facility name (e.g. Iron Vault)"
+                  placeholder="Facility name (e.g. Iron Vault)"
+                  style={{ flex: 1 }}
                 />
                 <Button
                   variant="primary"
@@ -1286,90 +1362,149 @@ export default function Management() {
                     )
                   }
                 >
-                  Create Gym
+                  Create
                 </Button>
               </div>
-
-              {gyms.length > 0 && (
-                <div className="gz-gym-chip-cloud" style={{ marginTop: 14 }}>
-                  {gyms.map(gym => (
-                    <span
-                      className="gz-gym-badge"
-                      key={gym.id}
-                      onClick={() => {
-                        navigator.clipboard?.writeText(gym.id).catch(() => {})
-                        toast(`Copied Gym ID: ${gym.id}`)
-                      }}
-                      title="Click to copy Gym ID"
-                    >
-                      <Icon name="globe" />
-                      <strong>{gym.name}</strong>
-                      <small>{gym.id}</small>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </SectionPanel>
+            </div>
           )}
         </div>
       )}
 
       {/* =========================================================================
-          TAB CONTENT: SQUAD PROGRESS & ACTIVITY LOGS (COACHES)
+          TAB: SQUAD ACTIVITY (COACHES)
          ========================================================================= */}
-      {isCoach && activeTab === 'progress' && (
-        <div className="gz-tab-content">
-          <AssignmentRecords data={data} members={members} />
+      {isCoach && activeTab === 'activity' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="card">
+            <div className="row between" style={{ marginBottom: 10 }}>
+              <h2 style={{ margin: 0, fontSize: 16 }}>Squad Activity & Consistency</h2>
+              <span className="tag acc">{complianceRate}% Consistency</span>
+            </div>
+
+            <div className="list" style={{ gap: 6 }}>
+              {(data?.logs || []).slice(0, 25).map((log: any, idx: number) => {
+                const mem = members.find((m: any) => m.id === log.memberId)
+                const isHit = log.status === 'hit' || log.status === 'logged'
+                return (
+                  <div
+                    key={`${log.assignmentId}-${log.date}-${idx}`}
+                    className="card small"
+                    style={{
+                      padding: '8px 12px',
+                      background: 'var(--surface-2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 650 }}>{mem?.name || log.memberId}</div>
+                      <div className="dim small" style={{ fontSize: '.76rem' }}>
+                        {log.assignmentType} · {log.date}
+                        {log.metric ? ` · ${log.metric}` : ''}
+                      </div>
+                    </div>
+                    <span className="tag" style={{ color: isHit ? 'var(--green)' : 'var(--orange)' }}>
+                      {log.status}
+                    </span>
+                  </div>
+                )
+              })}
+              {!(data?.logs || []).length && <div className="dim small">No squad activity recorded yet.</div>}
+            </div>
+          </div>
         </div>
       )}
 
       {/* =========================================================================
-          TAB CONTENT: REQUESTS INBOX & ROLE REQUESTS
+          TAB: REQUESTS INBOX
          ========================================================================= */}
-      {(activeTab === 'inbox' || (activeTab === 'overview' && pendingRequestsCount > 0)) && (
-        <div className={activeTab === 'overview' ? '' : 'gz-tab-content'}>
+      {activeTab === 'inbox' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {isManager ? (
-            <SectionPanel
-              title="Requests Inbox"
-              tag="APPROVALS QUEUE"
-              icon="bell"
-              glow={pendingRequestsCount > 0}
-              badge={
-                <GenZBadge variant={pendingRequestsCount > 0 ? 'orange' : 'acc'}>
-                  {pendingRequestsCount} Pending
-                </GenZBadge>
-              }
-            >
-              <p className="gz-help-text">
-                Admins approve all requests. Gym owners can approve member and trainer requests inside their gym.
-              </p>
+            <div className="card">
+              <div className="row between" style={{ marginBottom: 10 }}>
+                <h2 style={{ margin: 0, fontSize: 16 }}>Requests Queue</h2>
+                <span className="tag acc">{pendingRequestsCount} Pending</span>
+              </div>
 
-              {pendingRequestsCount > 0 ? (
-                <div className="gz-request-list">
-                  {(data?.requests || []).map((request: any) => (
-                    <div className="gz-request-card" key={String(request._id)}>
-                      <div className="gz-request-avatar">
-                        {(request.requesterName || 'Req').slice(0, 2).toUpperCase()}
+              <div className="list" style={{ gap: 8 }}>
+                {(data?.requests || []).map((request: any) => (
+                  <div
+                    key={String(request._id)}
+                    className="card small"
+                    style={{ padding: 12, background: 'var(--surface-2)' }}
+                  >
+                    <div className="row between" style={{ marginBottom: 6 }}>
+                      <div>
+                        <div style={{ fontWeight: 650 }}>{request.requesterName || 'Member Request'}</div>
+                        <div className="dim small">{timeAgo(request.created)}</div>
                       </div>
-                      <div className="gz-request-copy">
-                        <div className="gz-request-copy-top">
-                          <strong>{request.requesterName || 'Member Request'}</strong>
-                          <span className="gz-request-time">{timeAgo(request.created)}</span>
-                        </div>
-                        <div className="gz-request-badges">
-                          <GenZBadge variant="purple">{personaLabel(request.requestedRole)}</GenZBadge>
-                          <span className="gz-meta-tag">
-                            {request.type === 'join-gym' ? 'Join Gym' : 'Role Change'}
-                          </span>
-                        </div>
-                        {request.message && <div className="gz-request-bubble">{request.message}</div>}
+                      <span className="tag acc">{personaLabel(request.requestedRole)}</span>
+                    </div>
+                    {request.message && (
+                      <div className="dim small" style={{ marginBottom: 8 }}>
+                        "{request.message}"
                       </div>
-                      <div className="gz-request-actions">
+                    )}
+                    <div className="row" style={{ gap: 6 }}>
+                      <Button
+                        size="xs"
+                        variant="primary"
+                        onClick={() =>
+                          run(() => reviewManagementRequest(String(request._id), 'approve'), 'Request approved!')
+                        }
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="danger"
+                        onClick={() =>
+                          run(() => reviewManagementRequest(String(request._id), 'reject'), 'Request rejected')
+                        }
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {accessRequests
+                  .filter((r: any) => r.status === 'pending')
+                  .map((request: any) => (
+                    <div
+                      key={String(request._id)}
+                      className="card small"
+                      style={{ padding: 12, background: 'var(--surface-2)' }}
+                    >
+                      <div className="row between" style={{ marginBottom: 6 }}>
+                        <div>
+                          <div style={{ fontWeight: 650 }}>{request.name}</div>
+                          <div className="dim small">{request.email}</div>
+                        </div>
+                        <span className="tag">{personaLabel(request.requestedRole)}</span>
+                      </div>
+                      {request.message && (
+                        <div className="dim small" style={{ marginBottom: 8 }}>
+                          "{request.message}"
+                        </div>
+                      )}
+                      <div className="row" style={{ gap: 6 }}>
                         <Button
                           size="xs"
                           variant="primary"
                           onClick={() =>
-                            run(() => reviewManagementRequest(String(request._id), 'approve'), 'Request approved!')
+                            run(
+                              () =>
+                                approveAccessRequest(
+                                  String(request._id),
+                                  request.requestedRole || 'member',
+                                  request.gymId || user?.gymId
+                                ),
+                              'Access Invite Approved!'
+                            )
                           }
                         >
                           Approve
@@ -1378,7 +1513,14 @@ export default function Management() {
                           size="xs"
                           variant="danger"
                           onClick={() =>
-                            run(() => reviewManagementRequest(String(request._id), 'reject'), 'Request rejected')
+                            run(
+                              () =>
+                                api('/api/admin/access-request/reject', {
+                                  method: 'POST',
+                                  body: JSON.stringify({ id: request._id }),
+                                }),
+                              'Access request rejected'
+                            )
                           }
                         >
                           Reject
@@ -1387,412 +1529,67 @@ export default function Management() {
                     </div>
                   ))}
 
-                  {accessRequests
-                    .filter((r: any) => r.status === 'pending')
-                    .map((request: any) => (
-                      <div className="gz-request-card" key={String(request._id)}>
-                        <div className="gz-request-avatar">
-                          {request.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="gz-request-copy">
-                          <div className="gz-request-copy-top">
-                            <strong>{request.name}</strong>
-                            <span className="gz-request-time">{timeAgo(request.created)}</span>
-                          </div>
-                          <div className="gz-request-badges">
-                            <GenZBadge variant="blue">{personaLabel(request.requestedRole)}</GenZBadge>
-                            <span className="gz-meta-tag">Access Request</span>
-                          </div>
-                          <div className="gz-request-bubble">
-                            <span style={{ color: 'var(--acc)' }}>{request.email}</span>
-                            {request.message ? ` · ${request.message}` : ''}
-                          </div>
-                        </div>
-                        <div className="gz-request-actions">
-                          <Button
-                            size="xs"
-                            variant="primary"
-                            onClick={() =>
-                              run(
-                                () =>
-                                  approveAccessRequest(
-                                    String(request._id),
-                                    request.requestedRole || 'member',
-                                    request.gymId || user?.gymId
-                                  ),
-                                'Access Invite Approved!'
-                              )
-                            }
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="danger"
-                            onClick={() =>
-                              run(
-                                () =>
-                                  api('/api/admin/access-request/reject', {
-                                    method: 'POST',
-                                    body: JSON.stringify({ id: request._id })
-                                  }),
-                                'Access request rejected'
-                              )
-                            }
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <div className="gz-empty-card">
-                  <Icon name="checkCircle" className="gz-empty-icon" />
-                  <h4>Inbox Zero</h4>
-                  <p>All pending applications and access requests have been cleared.</p>
-                </div>
-              )}
-            </SectionPanel>
+                {!pendingRequestsCount && (
+                  <div className="dim small" style={{ textAlign: 'center', padding: '12px 0' }}>
+                    Inbox Zero — all applications cleared.
+                  </div>
+                )}
+              </div>
+            </div>
           ) : (
             /* Member Gym Request Form */
-            <SectionPanel
-              title="Request Gym Access or Role"
-              tag="GYM MEMBERSHIP"
-              icon="mail"
-            >
-              <p className="gz-help-text">
-                Apply to join a local gym facility or upgrade your account to trainer status.
+            <div className="card">
+              <h2 style={{ margin: '0 0 6px', fontSize: 16 }}>Request Gym Access or Role</h2>
+              <p className="dim small" style={{ marginBottom: 12 }}>
+                Apply to join a local gym facility or upgrade your status to trainer.
               </p>
 
-              <div className="gz-form-2col">
-                <div>
-                  <CustomPicker
-                    label="Target Gym"
-                    value={requestForm.gymId}
-                    onChange={gymId => setRequestForm({ ...requestForm, gymId })}
-                    placeholder="Select a gym facility"
-                    options={[
-                      ...(gyms.length ? gyms : data?.gyms || []).map((g: any) => ({
-                        value: g.id,
-                        label: g.name || g.id,
-                        meta: g.id
-                      })),
-                      ...(requestForm.gymId && !(gyms.length ? gyms : data?.gyms || []).some((g: any) => g.id === requestForm.gymId)
-                        ? [{ value: requestForm.gymId, label: requestForm.gymId, meta: 'Custom Gym ID' }]
-                        : [])
-                    ]}
-                    icon="globe"
-                    searchable={true}
-                  />
-                  <div style={{ marginTop: 6 }}>
-                    <input
-                      className="field"
-                      placeholder="Or enter custom Gym ID (e.g. downtown)"
-                      value={requestForm.gymId}
-                      onChange={e => setRequestForm({ ...requestForm, gymId: e.target.value })}
-                      style={{ fontSize: 13, minHeight: 36 }}
-                    />
-                  </div>
-                </div>
-                <CustomPicker
-                  label="Requested Status"
+              <div className="form-grid-2" style={{ marginBottom: 12 }}>
+                <SelectButton
+                  label="Target Facility"
+                  value={requestForm.gymId}
+                  onChange={val => setRequestForm({ ...requestForm, gymId: val })}
+                  options={gymOptions}
+                  placeholder="Select facility"
+                  searchable={true}
+                />
+                <SelectButton
+                  label="Requested Role"
                   value={requestForm.requestedRole}
-                  onChange={requestedRole => setRequestForm({ ...requestForm, requestedRole })}
+                  onChange={val => setRequestForm({ ...requestForm, requestedRole: val })}
                   options={[
-                    { value: 'member', label: 'Gym Member (Trainee)', icon: 'shield' },
-                    { value: 'trainer', label: 'Gym Trainer (Coach)', icon: 'arm' }
+                    { value: 'member', label: 'Gym Member (Trainee)', icon: 'person' },
+                    { value: 'trainer', label: 'Gym Trainer (Coach)', icon: 'arm' },
                   ]}
-                  icon="crown"
+                  placeholder="Select role"
                 />
               </div>
 
-              <label className="gz-form-label" style={{ marginTop: 10 }}>
-                Message to Gym Management
+              <div style={{ marginBottom: 12 }}>
+                <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                  Message to Management
+                </label>
                 <TextArea
                   value={requestForm.message}
                   onChange={e => setRequestForm({ ...requestForm, message: e.target.value })}
-                  placeholder="Tell the gym owner about your fitness goals or training experience…"
+                  placeholder="Tell the gym owner about your training goals…"
+                  rows={2}
                 />
-              </label>
-
-              <div className="gz-card-actions">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon="mail"
-                  disabled={!requestForm.gymId}
-                  onClick={() => run(() => createManagementRequest(requestForm), 'Application sent to Gym Owner!')}
-                >
-                  Submit Application
-                </Button>
               </div>
-            </SectionPanel>
+
+              <Button
+                variant="primary"
+                size="sm"
+                icon="mail"
+                disabled={!requestForm.gymId}
+                onClick={() => run(() => createManagementRequest(requestForm), 'Application sent!')}
+              >
+                Submit Application
+              </Button>
+            </div>
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-function latestLog(data: any, assignmentId: string) {
-  return (data?.logs || []).find((log: any) => log.assignmentId === assignmentId)
-}
-
-function ProgressActions({
-  type,
-  id,
-  current,
-  onLog,
-  itemId,
-}: {
-  type: 'diet' | 'schedule' | 'exercise'
-  id: string
-  current?: any
-  onLog: (type: any, id: string, status: string, itemId?: string) => void
-  itemId?: string
-}) {
-  const isDone = current?.status === 'hit' || current?.status === 'logged'
-  return (
-    <div className="gz-progress-actions">
-      {current && (
-        <span className={`gz-status-tag ${isDone ? 'status-approved' : 'status-rejected'}`}>
-          {current.status}
-        </span>
-      )}
-      <Button
-        size="xs"
-        variant={isDone ? 'ghost' : 'primary'}
-        onClick={() => onLog(type, id, type === 'diet' ? 'logged' : 'hit', itemId)}
-      >
-        {type === 'diet' ? 'Log Today' : 'Hit'}
-      </Button>
-      <Button size="xs" variant="ghost" onClick={() => onLog(type, id, 'missed', itemId)}>
-        Missed
-      </Button>
-    </div>
-  )
-}
-
-function MemberRecords({
-  data,
-  onSubmitFee,
-  onLog,
-}: {
-  data: any
-  onSubmitFee: (id: string) => void
-  onLog: (type: any, id: string, status: string, itemId?: string) => void
-}) {
-  return (
-    <div className="gz-grid-2col">
-      {/* Member Nutrition Card */}
-      <SectionPanel
-        title="My Daily Fuel Checklist"
-        tag="NUTRITION LOG"
-        icon="heart"
-        glow={true}
-        badge={
-          data?.diets?.[0]?.calories ? (
-            <GenZBadge variant="pink">{data.diets[0].calories} kcal goal</GenZBadge>
-          ) : null
-        }
-      >
-        {data?.diets?.length ? (
-          data.diets.map((diet: any) => (
-            <div className="gz-member-diet-card" key={diet.id}>
-              <div className="gz-member-diet-header">
-                <div>
-                  <h3 className="gz-member-diet-title">{diet.title}</h3>
-                  <p className="gz-member-diet-notes">
-                    {diet.calories ? `${diet.calories} kcal · ` : ''}
-                    {diet.notes || 'Daily nutrition guidelines'}
-                  </p>
-                </div>
-                <ProgressActions
-                  type="diet"
-                  id={diet.id}
-                  current={latestLog(data, diet.id)}
-                  onLog={onLog}
-                />
-              </div>
-
-              {diet.foods?.length > 0 && (
-                <div className="gz-member-food-list">
-                  {diet.foods.map((food: any) => {
-                    const checked = (data.logs || []).some(
-                      (log: any) =>
-                        log.assignmentId === diet.id &&
-                        log.itemId === food.id &&
-                        log.status === 'logged'
-                    )
-                    return (
-                      <button
-                        type="button"
-                        className={`gz-member-food-item ${checked ? 'checked' : ''}`}
-                        key={food.id}
-                        onClick={() => onLog('diet', diet.id, checked ? 'missed' : 'logged', food.id)}
-                      >
-                        <span className="gz-food-checkbox">
-                          {checked && <Icon name="check" />}
-                        </span>
-                        <div className="gz-member-food-copy">
-                          <strong className="gz-member-food-name">{food.name}</strong>
-                          <span className="gz-member-food-sub">
-                            {food.time}
-                            {food.serving ? ` · ${food.serving}` : ''}
-                          </span>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          ))
-        ) : (
-          <div className="gz-empty-card">
-            <Icon name="heart" className="gz-empty-icon" />
-            <p>No diet plan assigned by your coach yet.</p>
-          </div>
-        )}
-      </SectionPanel>
-
-      {/* Member Fees Card */}
-      <SectionPanel
-        title="My Membership Dues"
-        tag="PAYMENTS & INVOICES"
-        icon="plate"
-        badge={
-          (data?.fees || []).some((f: any) => f.status === 'due' || f.status === 'overdue') ? (
-            <GenZBadge variant="orange">Payment Due</GenZBadge>
-          ) : (
-            <GenZBadge variant="acc">Up to date</GenZBadge>
-          )
-        }
-      >
-        {data?.fees?.length ? (
-          <div className="gz-invoice-list">
-            {data.fees.map((fee: any) => (
-              <div className="gz-invoice-card" key={fee.id}>
-                <div className="gz-invoice-icon">
-                  <Icon name="plate" />
-                </div>
-                <div className="gz-invoice-copy">
-                  <strong>
-                    {fee.amount} {fee.currency}
-                  </strong>
-                  <span>
-                    Due {prettyDate(fee.dueDate)} · <span className={`status-text-${fee.status}`}>{fee.status}</span>
-                  </span>
-                  {fee.note && <small>{fee.note}</small>}
-                </div>
-                {['due', 'overdue', 'rejected'].includes(fee.status) && (
-                  <Button size="xs" variant="primary" onClick={() => onSubmitFee(fee.id)}>
-                    Mark Paid
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="gz-empty-card">
-            <Icon name="checkCircle" className="gz-empty-icon" />
-            <p>No outstanding membership fees.</p>
-          </div>
-        )}
-      </SectionPanel>
-    </div>
-  )
-}
-
-function AssignmentRecords({ data, members }: { data: any; members: any[] }) {
-  const hitCount = (data?.logs || []).filter((l: any) => l.status === 'hit' || l.status === 'logged').length
-  const missedCount = (data?.logs || []).filter((l: any) => l.status === 'missed').length
-
-  return (
-    <div className="gz-grid-2col">
-      <SectionPanel
-        title="Squad Consistency Tracker"
-        tag="LIVE ACTIVITY"
-        icon="chartLine"
-        badge={<GenZBadge variant="acc">{hitCount} Hits Logged</GenZBadge>}
-      >
-        <div className="gz-progress-metric-strip">
-          <div className="gz-metric-pill green">
-            <strong>{hitCount}</strong>
-            <span>Completed Hits</span>
-          </div>
-          <div className="gz-metric-pill orange">
-            <strong>{missedCount}</strong>
-            <span>Missed / Skipped</span>
-          </div>
-        </div>
-
-        {data?.logs?.length ? (
-          <div className="gz-log-list">
-            {data.logs.slice(0, 15).map((log: any, idx: number) => {
-              const mem = members.find((m: any) => m.id === log.memberId)
-              const isHit = log.status === 'hit' || log.status === 'logged'
-              return (
-                <div className="gz-log-item" key={`${log.assignmentId}-${log.date}-${idx}`}>
-                  <div className="gz-log-avatar">
-                    {(mem?.name || log.memberId || 'TR').slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="gz-log-copy">
-                    <strong>{mem?.name || log.memberId}</strong>
-                    <span>
-                      {log.assignmentType} · {log.date}
-                      {log.metric ? ` · ${log.metric}` : ''}
-                    </span>
-                  </div>
-                  <span className={`gz-status-tag ${isHit ? 'status-approved' : 'status-rejected'}`}>
-                    {log.status}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="gz-empty-card">
-            <Icon name="chartLine" className="gz-empty-icon" />
-            <p>No squad activity recorded yet.</p>
-          </div>
-        )}
-      </SectionPanel>
-
-      <SectionPanel
-        title="Deployed Diet Protocols"
-        tag="NUTRITION STATUS"
-        icon="heart"
-        badge={<GenZBadge variant="purple">{(data?.diets || []).length} Active</GenZBadge>}
-      >
-        {data?.diets?.length ? (
-          <div className="gz-log-list">
-            {data.diets.slice(0, 10).map((diet: any) => {
-              const mem = members.find((m: any) => m.id === diet.memberId)
-              return (
-                <div className="gz-log-item" key={diet.id}>
-                  <div className="gz-log-icon">
-                    <Icon name="heart" />
-                  </div>
-                  <div className="gz-log-copy">
-                    <strong>{diet.title}</strong>
-                    <span>{mem?.name || diet.memberId}</span>
-                  </div>
-                  <span className="gz-status-tag status-approved">
-                    {latestLog(data, diet.id)?.status || 'Active'}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="gz-empty-card">
-            <Icon name="heart" className="gz-empty-icon" />
-            <p>No diet protocols deployed yet.</p>
-          </div>
-        )}
-      </SectionPanel>
     </div>
   )
 }

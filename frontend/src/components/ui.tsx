@@ -244,6 +244,111 @@ export function Row({ icon, iconTint, title, subtitle, value, accessory = 'none'
 
 /* ============================ picker ============================ */
 
+function SelectSheetModal({ title, value, options, onChange, close, searchable }) {
+  const [q, setQ] = useState('')
+  const filtered = searchable && q.trim()
+    ? options.filter(o => `${o.label} ${o.subtitle || ''}`.toLowerCase().includes(q.toLowerCase()))
+    : options
+
+  return (
+    <>
+      <h3 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>{title}</h3>
+      {searchable && options.length > 5 && (
+        <div style={{ marginBottom: 12 }}>
+          <SearchField
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            onClear={() => setQ('')}
+            placeholder="Search options…"
+            autoFocus
+          />
+        </div>
+      )}
+      <div className="sect-b" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+        {filtered.map(o => (
+          <button
+            key={o.value}
+            type="button"
+            className="lrow tap"
+            onClick={() => {
+              close()
+              onChange(o.value)
+            }}
+          >
+            {o.icon && <Icon name={o.icon} style={{ fontSize: 18, marginRight: 6, color: 'var(--acc)' }} />}
+            <span className="lrow-m">
+              <span className="lrow-t" style={{ fontWeight: o.value === value ? 700 : 500 }}>
+                {o.label}
+              </span>
+              {o.subtitle && <span className="lrow-s">{o.subtitle}</span>}
+            </span>
+            {o.value === value && <Icon name="check" className="lrow-k" />}
+          </button>
+        ))}
+        {!filtered.length && (
+          <div className="dim small" style={{ padding: '16px 0', textAlign: 'center' }}>
+            No matching options found
+          </div>
+        )}
+      </div>
+      <div style={{ height: 8 }} />
+    </>
+  )
+}
+
+export function SelectButton({
+  label,
+  title,
+  value,
+  options,
+  onChange,
+  placeholder = 'Select option…',
+  icon,
+  searchable = false,
+  className = '',
+  style,
+  disabled = false,
+}) {
+  const cur = options.find(o => o.value === value)
+  const open = () => {
+    if (disabled) return
+    const { openSheet } = require_ui()
+    openSheet(close => (
+      <SelectSheetModal
+        title={title || label || 'Select Option'}
+        value={value}
+        options={options}
+        onChange={onChange}
+        close={close}
+        searchable={searchable || options.length > 7}
+      />
+    ))
+  }
+
+  return (
+    <div className={`select-btn-wrap ${className}`} style={style}>
+      {label && (
+        <label className="small muted" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+          {label}
+        </label>
+      )}
+      <button
+        type="button"
+        className={`select-btn ${cur ? 'has-value' : 'placeholder'}`}
+        onClick={open}
+        disabled={disabled}
+        aria-label={label || title || placeholder}
+      >
+        <span className="select-btn-content">
+          {(cur?.icon || icon) && <Icon name={cur?.icon || icon} className="select-btn-icon" />}
+          <span className="select-btn-text">{cur ? cur.label : placeholder}</span>
+        </span>
+        <Icon name="chevronDown" className="select-btn-arrow" />
+      </button>
+    </div>
+  )
+}
+
 // Replaces <select>. A native select opens a system list that ignores the app's
 // theme entirely — on dark mode it flashes a white sheet — and can't show more
 // than a bare label per option. This opens our own sheet with a checkmark on the

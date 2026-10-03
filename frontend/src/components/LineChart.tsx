@@ -12,7 +12,9 @@ const W = 340   // viewBox width; the svg stretches to its container, height com
 // opts: { h, unit, color, axes, goal, invert }
 //   invert flips the y axis, for a scale that counts down as it gets harder (RIR). Without it
 //   a curve of reps-in-reserve reads upside down, with the hardest sets at the floor.
-export default function LineChart({ points, h = 150, unit = '', color = 'var(--acc)', axes = true, goal = null, invert = false }) {
+export default function LineChart({ points, h = 150, unit = '', color = 'var(--acc)', axes = true, goal = null, invert = false, mode = 'default' }) {
+  const brutal = mode === 'brutalist'
+  const strokeColor = brutal ? 'var(--brut-red)' : color
   const svgRef = useRef(null)
   const wrapRef = useRef(null)
   const tipRef = useRef(null)
@@ -63,8 +65,8 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
     for (let v = Math.ceil(ymin / step) * step; v <= ymax + 1e-9; v += step) {
       const y = Y(v)
       gridlines.push(<g key={'y' + v}>
-        <line x1={P.l} y1={y} x2={W - P.r} y2={y} stroke="var(--sep-op)" strokeWidth="1" strokeDasharray="2 4" />
-        <text x={P.l - 5} y={y + 3.5} textAnchor="end" fontSize="9.5" fill="var(--label-2)">{fmtNum(v)}</text>
+        <line x1={P.l} y1={y} x2={W - P.r} y2={y} stroke={brutal ? 'var(--brut-line)' : 'var(--sep-op)'} strokeWidth={brutal ? '1' : '1'} strokeDasharray={brutal ? '0' : '2 4'} />
+        <text x={P.l - 5} y={y + 3.5} textAnchor="end" fontSize={brutal ? '10' : '9.5'} fill={brutal ? 'var(--brut-ink)' : 'var(--label-2)'}>{fmtNum(v)}</text>
       </g>)
     }
     const d0 = new Date(t0), d1 = new Date(t1)
@@ -82,8 +84,8 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
       if (i % every) return
       const x = X(tk.t)
       gridlines.push(<g key={'xmark' + i}>
-        <line x1={x} y1={P.t} x2={x} y2={H - P.b} stroke="var(--sep-op)" strokeWidth="1" strokeDasharray="2 4" />
-        <text x={x} y={H - 7} textAnchor={tk.anchor || 'middle'} fontSize="9.5" fill="var(--label-2)">{tk.txt}</text>
+        <line x1={x} y1={P.t} x2={x} y2={H - P.b} stroke={brutal ? 'var(--brut-line)' : 'var(--sep-op)'} strokeWidth={brutal ? '1' : '1'} strokeDasharray={brutal ? '0' : '2 4'} />
+        <text x={x} y={H - 7} textAnchor={tk.anchor || 'middle'} fontSize={brutal ? '10' : '9.5'} fill={brutal ? 'var(--brut-ink)' : 'var(--label-2)'}>{tk.txt}</text>
       </g>)
     })
   }
@@ -91,6 +93,9 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
   const poly = pts.map(p => X(p.t).toFixed(1) + ',' + Y(p.y).toFixed(1)).join(' ')
   const last = pts[pts.length - 1]
   const gid = 'g' + Math.round(t0 % 1e7) + '_' + H
+  // Brutalist: flat red fill under the curve, no gradient fade — the area is a solid
+  // mechanical block the way a printed chart would be. Default keeps the fade.
+  const fillPoly = `${P.l},${H - P.b} ${poly} ${X(last.t).toFixed(1)},${H - P.b}`
   const hoverPts = (single ? [points[0]] : points).map(p => ({ x: X(p.t), y: Y(p.y), iso: p.d || isoOf(new Date(p.t)), v: p.y, note: p.note }))
   const marked = points.some(p => p.m != null)
 
@@ -117,21 +122,21 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
         </linearGradient></defs>
         {gridlines}
         {goal != null && isFinite(goal) && <>
-          <line x1={P.l} y1={Y(goal)} x2={W - P.r} y2={Y(goal)} stroke="var(--yellow)" strokeWidth="1.6" strokeDasharray="7 4" />
-          <text x={W - P.r - 2} y={Y(goal) - 5} textAnchor="end" fontSize="9.5" fontWeight="700" fill="var(--yellow)">{fmtNum(goal)}</text>
+          <line x1={P.l} y1={Y(goal)} x2={W - P.r} y2={Y(goal)} stroke={brutal ? 'var(--brut-red)' : 'var(--yellow)'} strokeWidth={brutal ? '2' : '1.6'} strokeDasharray={brutal ? '0' : '7 4'} />
+          <text x={W - P.r - 2} y={Y(goal) - 5} textAnchor="end" fontSize={brutal ? '10' : '9.5'} fontWeight="700" fill={brutal ? 'var(--brut-red)' : 'var(--yellow)'}>{fmtNum(goal)}</text>
         </>}
-        <polygon points={`${P.l},${H - P.b} ${poly} ${X(last.t).toFixed(1)},${H - P.b}`} fill={`url(#${gid})`} />
-        <polyline points={poly} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <polygon points={fillPoly} fill={brutal ? 'var(--brut-red)' : `url(#${gid})`} />
+        <polyline points={poly} fill="none" stroke={strokeColor} strokeWidth={brutal ? '3' : '2.5'} strokeLinejoin={brutal ? 'miter' : 'round'} strokeLinecap={brutal ? 'butt' : 'round'} />
         {marked && pts.map((p, i) => (p.m == null ? null :
           <circle key={'m' + i} cx={X(p.t)} cy={Y(p.y)} r={2.4 + p.m * 3} fill={color} opacity={0.3 + p.m * 0.7} />))}
         <circle cx={X(last.t)} cy={Y(last.y)} r="4" fill={color} />
         {hover && <g>
-          <line className="cvl" x1={hover.x} y1={P.t} x2={hover.x} y2={H - P.b} stroke="var(--label-3)" strokeWidth="1" strokeDasharray="3 3" />
-          <line className="chl" x1={P.l} y1={hover.y} x2={W - P.r} y2={hover.y} stroke="var(--label-3)" strokeWidth="1" strokeDasharray="3 3" />
-          <circle cx={hover.x} cy={hover.y} r="5" fill={color} stroke="var(--bg)" strokeWidth="2" />
+          <line className="cvl" x1={hover.x} y1={P.t} x2={hover.x} y2={H - P.b} stroke={brutal ? 'var(--brut-ink)' : 'var(--label-3)'} strokeWidth="1" strokeDasharray={brutal ? '0' : '3 3'} />
+          <line className="chl" x1={P.l} y1={hover.y} x2={W - P.r} y2={hover.y} stroke={brutal ? 'var(--brut-ink)' : 'var(--label-3)'} strokeWidth="1" strokeDasharray={brutal ? '0' : '3 3'} />
+          <circle cx={hover.x} cy={hover.y} r={brutal ? '4.5' : '5'} fill={strokeColor} stroke={brutal ? 'var(--brut-paper)' : 'var(--bg)'} strokeWidth={brutal ? '2' : '2'} />
         </g>}
       </svg>
-      {hover && <div className="ctip" ref={tipRef}>
+      {hover && <div className={'ctip' + (brutal ? ' ctip-brut' : '')} ref={tipRef}>
         {fmtDate(hover.iso, true)} · {fmtNum(hover.v)}{unit ? ' ' + unit : ''}{hover.note ? ' · ' + hover.note : ''}
       </div>}
     </div>

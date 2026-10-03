@@ -12,6 +12,7 @@ export default function TabBar({ onStart }) {
   const nav = useNavigate()
   const loc = useLocation()
   const S = useStore(s => s.S)
+  const update = useStore(s => s.update)
   const user = useStore(s => s.user)
   const isGuest = useStore(s => s.isGuest())
   const [managementData, setManagementData] = useState(null)
@@ -37,6 +38,24 @@ export default function TabBar({ onStart }) {
     (cur === 'library' && k === 'home') ||
     (cur === 'settings' && k === 'home')
 
+  const togglePauseResume = () => {
+    if (S.active) {
+      update(s => {
+        if (s.active.paused) {
+          // Resume: adjust start time to account for paused duration
+          const pausedDuration = Date.now() - s.active.pausedTime
+          s.active.start = s.active.start + pausedDuration
+          s.active.paused = false
+          s.active.pausedTime = null
+        } else {
+          // Pause: record the time when paused
+          s.active.paused = true
+          s.active.pausedTime = Date.now()
+        }
+      })
+    }
+  }
+
   const startWorkout = () => {
     if (!S.active) {
       const assignedPlan = user?.role === 'member' ? managementData?.trainingPlan : null
@@ -53,19 +72,53 @@ export default function TabBar({ onStart }) {
         return
       }
     }
-    nav('/workout')
+    // Only navigate if not already on the workout page
+    if (cur !== 'workout') {
+      nav('/workout')
+    }
   }
 
   const handleCenterButton = () => {
     if (cur === 'feed') {
       nav('/new-post')
+    } else if (S.active && cur === 'workout') {
+      // On workout page with active workout: toggle pause/resume
+      togglePauseResume()
     } else {
+      // Start new workout or navigate to workout page
       startWorkout()
     }
   }
 
   const isFeedPage = cur === 'feed'
   const isStaff = !!user && (user.admin || user.role === 'owner' || user.role === 'trainer')
+  const isWorkoutPage = cur === 'workout'
+  
+  // Determine button icon and label based on state
+  let centerIcon = 'dumbbell'
+  let centerLabel = t('Start')
+  let centerAriaLabel = t('Start Workout')
+  
+  if (isFeedPage) {
+    centerIcon = 'plus'
+    centerLabel = t('Post')
+    centerAriaLabel = t('New Post')
+  } else if (S.active) {
+    if (isWorkoutPage && S.active.paused) {
+      centerIcon = 'play'
+      centerLabel = t('Resume')
+      centerAriaLabel = t('Resume Workout')
+    } else if (isWorkoutPage && !S.active.paused) {
+      centerIcon = 'pause'
+      centerLabel = t('Pause')
+      centerAriaLabel = t('Pause Workout')
+    } else {
+      // Active workout but not on workout page - navigate to workout
+      centerIcon = 'play'
+      centerLabel = t('Resume')
+      centerAriaLabel = t('Resume Workout')
+    }
+  }
 
   const Tab = ({ k, icon, to, label }) => (
     <button
@@ -89,12 +142,12 @@ export default function TabBar({ onStart }) {
         type="button"
         className={'start' + (S.active && !isFeedPage ? ' rec' : '')}
         onClick={handleCenterButton}
-        aria-label={isFeedPage ? t('New Post') : (S.active ? t('Resume Workout') : t('Start Workout'))}
+        aria-label={centerAriaLabel}
       >
         <span className="cir">
-          <Icon name={isFeedPage ? 'plus' : (S.active ? 'play' : 'dumbbell')} />
+          <Icon name={centerIcon} />
         </span>
-        <span className="lbl">{isFeedPage ? t('Post') : (S.active ? t('Resume') : t('Start'))}</span>
+        <span className="lbl">{centerLabel}</span>
       </button>
 
       <Tab k="stats" icon="chart" to="/stats" label={t('Stats')} />

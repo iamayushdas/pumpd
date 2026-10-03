@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { useStore } from '../store/useStore'
 import {
   effectiveRoutine,
@@ -30,6 +31,55 @@ import { Card } from '../components/ui/card'
 import { Progress } from '../components/ui/progress'
 import { cn } from '../lib/utils'
 import { glyphOf } from '../lib/glyphs'
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.1,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: [0.25, 0.46, 0.45, 0.94],
+    },
+  },
+}
+
+const cardVariants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: {
+      duration: 0.4,
+      ease: [0.25, 0.46, 0.45, 0.94],
+    },
+  },
+}
+
+const statCardVariants = {
+  hidden: { opacity: 0, scale: 0.9, y: 20 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: [0.34, 1.56, 0.64, 1],
+    },
+  },
+}
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -131,8 +181,13 @@ export default function Home() {
   const displayName = user?.name || t('athlete')
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-5 sm:space-y-6">
-      <header className="space-y-3 pt-1 sm:space-y-4 sm:pt-3">
+    <motion.main 
+      className="mx-auto w-full max-w-3xl space-y-5 sm:space-y-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.header className="space-y-3 pt-1 sm:space-y-4 sm:pt-3" variants={itemVariants}>
         <div className="flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--label-3)]">{t('Your daily momentum')}</p>
           <div className="flex shrink-0 items-center gap-2">
@@ -152,24 +207,34 @@ export default function Home() {
             {today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-      </header>
+      </motion.header>
 
-      <section className="grid grid-cols-3 gap-2.5 sm:gap-3" aria-label={t('Your progress')}>
-        <button
+      <motion.section 
+        className="grid grid-cols-3 gap-2.5 sm:gap-3" 
+        aria-label={t('Your progress')}
+        variants={itemVariants}
+      >
+        <motion.button
           type="button"
           onClick={() => calendarSheet(todayKey)}
           className="group min-h-[112px] rounded-[24px] border border-white/[0.07] bg-[var(--surface)] p-3 text-left shadow-[0_14px_40px_-30px_rgba(0,0,0,0.9)] transition-transform duration-200 active:scale-[0.97] sm:p-4"
+          variants={statCardVariants}
+          whileHover={{ scale: 1.02, y: -2 }}
+          whileTap={{ scale: 0.97 }}
         >
           <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--orange)_15%,transparent)] text-[var(--orange)]">
             <Icon name="flame" className="text-[17px]" />
           </span>
           <span className="block text-xl font-bold tracking-[-0.05em] text-[var(--label)]">{streak}</span>
           <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--label-3)]">{t('Week Streak')}</span>
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           type="button"
           onClick={() => calendarSheet(todayKey)}
           className="group min-h-[112px] rounded-[24px] border border-white/[0.07] bg-[var(--surface)] p-3 text-left shadow-[0_14px_40px_-30px_rgba(0,0,0,0.9)] transition-transform duration-200 active:scale-[0.97] sm:p-4"
+          variants={statCardVariants}
+          whileHover={{ scale: 1.02, y: -2 }}
+          whileTap={{ scale: 0.97 }}
         >
           <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--acc-soft)] text-[var(--acc)]">
             <Icon name="dumbbell" className="text-[17px]" />
@@ -178,19 +243,22 @@ export default function Home() {
             {wThisWeek}<span className="text-sm font-medium text-[var(--label-3)]">{plannedPerWeek ? `/${plannedPerWeek}` : ''}</span>
           </span>
           <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--label-3)]">{t('This Week')}</span>
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           type="button"
           onClick={() => bwSheet()}
           className="group min-h-[112px] rounded-[24px] border border-white/[0.07] bg-[var(--surface)] p-3 text-left shadow-[0_14px_40px_-30px_rgba(0,0,0,0.9)] transition-transform duration-200 active:scale-[0.97] sm:p-4"
+          variants={statCardVariants}
+          whileHover={{ scale: 1.02, y: -2 }}
+          whileTap={{ scale: 0.97 }}
         >
           <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--teal)_15%,transparent)] text-[var(--teal)]">
             <Icon name="chartLine" className="text-[17px]" />
           </span>
           <span className="block text-xl font-bold tracking-[-0.05em] text-[var(--label)]">{bw ? fmtNum(bw.w) : '—'}</span>
           <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--label-3)]">{S.unit || 'kg'}</span>
-        </button>
-      </section>
+        </motion.button>
+      </motion.section>
 
       <Card
         className={cn(
@@ -198,6 +266,11 @@ export default function Home() {
           S.active && 'bg-[linear-gradient(135deg,var(--surface)_0%,color-mix(in_srgb,var(--surface)_75%,var(--orange)_25%)_100%)]',
         )}
       >
+        <motion.div
+          variants={itemVariants}
+          initial="hidden"
+          animate="visible"
+        >
         <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[var(--acc-soft)] blur-3xl" />
         <div className="pointer-events-none absolute -bottom-28 -left-16 h-48 w-48 rounded-full bg-[color-mix(in_srgb,var(--purple)_13%,transparent)] blur-3xl" />
         <div className="relative">
@@ -230,29 +303,35 @@ export default function Home() {
             size="lg"
             variant={S.active ? 'destructive' : 'default'}
             className="mt-6 w-full sm:w-auto sm:min-w-[190px]"
-            onClick={onTodayAction}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onTodayAction();
+            }}
           >
             <Icon name={S.active ? 'play' : hasTrainerWorkout || routine ? 'play' : 'calendar'} className="text-[17px]" />
             {S.active ? t('Resume Workout') : hasTrainerWorkout ? t('Start Trainer Workout') : routine ? t('Start Workout') : t('Schedule a Workout')}
           </Button>
         </div>
+        </motion.div>
       </Card>
 
-      <Card className="p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--label-3)]">{t('Your rhythm')}</p>
-            <h2 className="mt-1 text-base font-semibold tracking-[-0.025em] text-[var(--label)]">{wkLabel}</h2>
+      <motion.div variants={itemVariants}>
+        <Card className="p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--label-3)]">{t('Your rhythm')}</p>
+              <h2 className="mt-1 text-base font-semibold tracking-[-0.025em] text-[var(--label)]">{wkLabel}</h2>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={() => setWeekOffset(value => value - 1)} aria-label={t('Previous week')}>
+                <Icon name="chevronLeft" className="text-[16px]" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={() => setWeekOffset(value => value + 1)} aria-label={t('Next week')}>
+                <Icon name="chevronRight" className="text-[16px]" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={() => setWeekOffset(value => value - 1)} aria-label={t('Previous week')}>
-              <Icon name="chevronLeft" className="text-[16px]" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={() => setWeekOffset(value => value + 1)} aria-label={t('Next week')}>
-              <Icon name="chevronRight" className="text-[16px]" />
-            </Button>
-          </div>
-        </div>
         <div className="mt-5 grid grid-cols-7 gap-1.5 sm:gap-2">
           {weekDays.map(day => (
             <button
@@ -282,8 +361,9 @@ export default function Home() {
           <span className="inline-flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full bg-[var(--orange)]" />{t('Moved')}</span>
         </div>
       </Card>
+      </motion.div>
 
-      <section>
+      <motion.section variants={itemVariants}>
         <div className="mb-3 flex items-end justify-between px-1">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--label-3)]">{t('Keep the momentum')}</p>
@@ -292,26 +372,45 @@ export default function Home() {
           <Icon name="sparkles" className="text-[var(--acc)]" />
         </div>
         <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-          <button type="button" onClick={() => nav('/plan')} className="group rounded-[22px] border border-[var(--sep-op)] bg-[var(--surface)] p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--acc-line)] active:scale-[0.97] sm:p-4">
+          <motion.button 
+            type="button" 
+            onClick={() => nav('/plan')} 
+            className="group rounded-[22px] border border-[var(--sep-op)] bg-[var(--surface)] p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--acc-line)] active:scale-[0.97] sm:p-4"
+            whileHover={{ scale: 1.02, y: -4 }}
+            whileTap={{ scale: 0.97 }}
+          >
             <span className="mb-8 flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--acc-soft)] text-[var(--acc)]"><Icon name="calendar" className="text-[17px]" /></span>
             <span className="block text-xs font-bold text-[var(--label)]">{t('Plan')}</span>
             <span className="mt-1 block text-[10px] leading-4 text-[var(--label-3)]">{t('Build your split')}</span>
-          </button>
-          <button type="button" onClick={() => bwSheet()} className="group rounded-[22px] border border-[var(--sep-op)] bg-[var(--surface)] p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--teal)_35%,transparent)] active:scale-[0.97] sm:p-4">
+          </motion.button>
+          <motion.button 
+            type="button" 
+            onClick={() => bwSheet()} 
+            className="group rounded-[22px] border border-[var(--sep-op)] bg-[var(--surface)] p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--teal)_35%,transparent)] active:scale-[0.97] sm:p-4"
+            whileHover={{ scale: 1.02, y: -4 }}
+            whileTap={{ scale: 0.97 }}
+          >
             <span className="mb-8 flex h-9 w-9 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--teal)_15%,transparent)] text-[var(--teal)]"><Icon name="scale" className="text-[17px]" /></span>
             <span className="block text-xs font-bold text-[var(--label)]">{t('Log weight')}</span>
             <span className="mt-1 block text-[10px] leading-4 text-[var(--label-3)]">{t('Track the trend')}</span>
-          </button>
-          <button type="button" onClick={() => nav('/library')} className="group rounded-[22px] border border-[var(--sep-op)] bg-[var(--surface)] p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--purple)_35%,transparent)] active:scale-[0.97] sm:p-4">
+          </motion.button>
+          <motion.button 
+            type="button" 
+            onClick={() => nav('/library')} 
+            className="group rounded-[22px] border border-[var(--sep-op)] bg-[var(--surface)] p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--purple)_35%,transparent)] active:scale-[0.97] sm:p-4"
+            whileHover={{ scale: 1.02, y: -4 }}
+            whileTap={{ scale: 0.97 }}
+          >
             <span className="mb-8 flex h-9 w-9 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--purple)_15%,transparent)] text-[var(--purple)]"><Icon name="list" className="text-[17px]" /></span>
             <span className="block text-xs font-bold text-[var(--label)]">{t('Library')}</span>
             <span className="mt-1 block text-[10px] leading-4 text-[var(--label-3)]">{t('Find a move')}</span>
-          </button>
+          </motion.button>
         </div>
-      </section>
+      </motion.section>
 
       {!trainerAssigned && !S.routines.length && !S.active && (
-        <Card className="relative overflow-hidden border-[var(--acc-line)] bg-[linear-gradient(135deg,var(--acc-soft),transparent)] p-5 sm:p-6">
+        <motion.div variants={cardVariants}>
+          <Card className="relative overflow-hidden border-[var(--acc-line)] bg-[linear-gradient(135deg,var(--acc-soft),transparent)] p-5 sm:p-6">
           <div className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-[var(--acc-soft)] blur-2xl" />
           <div className="relative flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--acc)] text-[var(--on-acc)] shadow-[0_10px_24px_-10px_var(--acc)]"><Icon name="sparkles" /></span>
@@ -324,9 +423,11 @@ export default function Home() {
             <><Button onClick={loadStarterPlan} className="w-full"><Icon name="sparkles" className="text-[16px]" />{t('Load starter plan (PPL)')}</Button><Button variant="secondary" onClick={() => nav('/plan')} className="w-full">{t('Build my own plan')}</Button></>
           </div>
         </Card>
+        </motion.div>
       )}
 
-      <Card className="overflow-hidden p-5 sm:p-6">
+      <motion.div variants={itemVariants}>
+        <Card className="overflow-hidden p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--label-3)]">{t('Body weight')}</p>
@@ -363,6 +464,7 @@ export default function Home() {
           <div className="mt-6 rounded-2xl bg-[var(--surface-2)] px-4 py-5 text-sm leading-5 text-[var(--label-2)]">{t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>
         )}
       </Card>
-    </main>
+      </motion.div>
+    </motion.main>
   )
 }

@@ -44,12 +44,24 @@ function StartChooser() {
 }
 
 /* ---------- elapsed clock (isolated so the workout tree doesn't re-render every second) ---------- */
-function Elapsed({ start }) {
+function Elapsed({ start, paused, pausedTime }) {
   const [t, setT] = useState('0:00')
   useEffect(() => {
-    const tick = () => { const s = Math.floor((Date.now() - start) / 1000); setT(Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')) }
-    tick(); const iv = setInterval(tick, 1000); return () => clearInterval(iv)
-  }, [start])
+    const tick = () => {
+      let elapsed
+      if (paused) {
+        // When paused, show time up to when it was paused
+        elapsed = Math.floor((pausedTime - start) / 1000)
+      } else {
+        // When running, calculate total elapsed time minus any paused duration
+        elapsed = Math.floor((Date.now() - start) / 1000)
+      }
+      setT(Math.floor(elapsed / 60) + ':' + String(elapsed % 60).padStart(2, '0'))
+    }
+    tick()
+    const iv = setInterval(tick, 1000)
+    return () => clearInterval(iv)
+  }, [start, paused, pausedTime])
   return <span>{t}</span>
 }
 
@@ -254,7 +266,13 @@ function ActiveWorkout() {
   return <div className="narrow">
     <div className="hdr">
       <button className="iconbtn" aria-label={t('Discard')} onClick={() => confirmSheet({ title: t('Discard workout?'), message: t('The sets you logged in this session will be lost.'), confirmText: t('Discard'), danger: true, onConfirm: () => { update(s => { s.active = null }); stopRest(); nav('/home') } })}><Icon name="xmark" /></button>
-      <div style={{ textAlign: 'center' }}><div style={{ fontWeight: 600 }}>{A.name}</div><div className="sub"><Elapsed start={A.start} /> · {t('{0} sets', done + '/' + total)}</div></div>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontWeight: 600 }}>{A.name}</div>
+        <div className="sub">
+          {A.paused && <span style={{ color: 'var(--orange)', marginRight: 6 }}>{t('Paused')} · </span>}
+          <Elapsed start={A.start} paused={A.paused} pausedTime={A.pausedTime} /> · {t('{0} sets', done + '/' + total)}
+        </div>
+      </div>
       <button className="iconbtn" style={{ color: 'var(--acc)' }} aria-label={t('Finish')} onClick={finishWorkout}><Icon name="check" /></button>
     </div>
     <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
